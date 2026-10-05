@@ -25,11 +25,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"){
 		!preg_match('/[a-z]/', $password) ||
 		!preg_match('/[0-9]/', $password)
 	){
-		$message = "Invalid password";
+		$message = "Invalid password, min 8 characters, requires Uppercase and a Number";
 	}
 
 	//This will make sure the user doesn't leave anything blank and password matches
-	if ($username === "" || $email === "" || $password === "") {
+	elseif ($username === "" || $email === "" || $password === "") {
 		$message = "All fields required.";
 	} elseif ($password !== $confirmPassword) {
 		$message = "Passwords do not match";
