@@ -2,7 +2,6 @@
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
-require_once('db_connection.php');
 
 function getConnection(){
 	require('db_connection.php');
@@ -26,7 +25,7 @@ function doRegister($username, $email, $password){
 		!preg_match('/[a-z]/', $password) ||
 		!preg_match('/[0-9]/', $password)
 	) {
-		return ["success" => fa;se, "message" => "Invalid registration information"];
+		return ["success" => false, "message" => "Invalid registration information"];
 	}
 
 	$connection = getConnection();
@@ -113,8 +112,7 @@ function doLogout($sessionID){
 
 
 
-function requestProcessor($request)
-{
+function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
 		return ["success" => false, "message" => "Invalid request type"];
@@ -122,7 +120,7 @@ function requestProcessor($request)
 
 	echo "Received request: " . $request["type"] . PHP_EOL;
 
-	try{
+	try {
 		switch($request["type"]){
 			//gonna use register to explain the flow of this thing since its what I made
 			//register sends username,email,password to rabbitmq, requestProcessor detects the type then calls the associated function, in this case doRegister
@@ -132,7 +130,7 @@ function requestProcessor($request)
 				return doRegister(
 					$request["username"] ?? "",
 					$request["email"] ?? "",
-					$request["password"] ??
+					$request["password"] ?? ""
 				);
 			case "login":
 				return doLogin(
@@ -151,16 +149,17 @@ function requestProcessor($request)
 			//if you notice that i'm returning instead of just breaking
 			//return passes our results back to the rabbitmq lib. if we only call the fucntion without returning,
 			//then our frontend wouldnt receive any success responses
-		} catch (Throwable $e){
-			//should always catch errors/exceptions, you never know what can get through
-			//One example could be when MySQL just isnt working, itll tell us instead of saying nothing
-			error_log("Listener error: " . $e->getMessage());
-
-			return [
-				"success" => false,
-				"message" => "Internal server error"
-			];
 		}
+	} catch (Throwable $e) {
+		//should always catch errors/exceptions, you never know what can get through
+		//One example could be when MySQL just isnt working, itll tell us instead of saying nothing
+		error_log("Listener error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Internal server error"
+			];
+	}
 }
 // NOW WE START IT!!!!!!!!!!!
 $server = new rabbitMQServer(
@@ -171,5 +170,4 @@ $server = new rabbitMQServer(
 echo "Database listener started..." . PHP_EOL;
 
 $server->process_requests("requestProcessor");
-}
 ?>
