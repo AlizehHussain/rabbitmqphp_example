@@ -4,7 +4,7 @@
 	$host = getenv("DB_HOST") ?: "localhost";
 	$username = getenv("DB_USER") ?: "app_user";
 	$password = getenv("DB_PASSWORD");
-	$database = getenv("DB_NAME") ?: "";
+	$database = getenv("DB_NAME") ?: "Webdb";
 	$port = (int) (getenv("DB_PORT") ?: 3306);
 
 	if ($password === false){
