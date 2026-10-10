@@ -69,7 +69,7 @@ function doRegister($username, $email, $password){
 
 }
 
-function doLogin($loginID,$password)
+function doLogin($username,$password)
 {
 	$connection = getConnection();
 // checing if the user a nd password hash exist in the table
@@ -81,7 +81,7 @@ function doLogin($loginID,$password)
 	);
 	
 	//binding the parameters
-    $stmt->bind_param("ss", $loginID, $loginID);
+    $stmt->bind_param("ss", $username, $username);
     //executing query
     $stmt->execute();
 	
