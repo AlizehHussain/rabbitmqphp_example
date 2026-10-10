@@ -1,13 +1,73 @@
 <?php
+require_once ('path.inc');
+require_once ('get_host_info.inc');
+require_once('rabbitMQLib.inc');
+
+$message = "";
+
+if($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username = trim($_POST['username'] ?? "");
+    $password = $_POST['password'] ?? "";
+
+    //check if the username and password are empty
+    if ($username ==="") 
+        {
+            $message = "Please enter your username or email.";
+        }
+    elseif ($password === "")
+        {
+            $message = "Please enter your password.";
+        }
+
+    else 
+        {
+            // conecting to rabbitmq
+            $client = new rabbitMQClient
+            ("testRabbitMQ.ini", "testServer");
+
+        // LOGIN REQUEST
+        $request = array();
+        $request['type'] = "login";
+        $request['username'] = $username;
+        $request['password'] = $password;
+        
+    //send request to rabbitmq and wait for a repky from listner
+        $response = $client->send_request($request);
+        // check if login was successful and includes a token
+        if (isset($response["success"]) && $response["success"] === true 
+        && isset ($response['session_token']) )
+        {
+        // storing token in cookie for 30 min and going to home page & works on http only
+        setcookie("sessionToken", 
+        $response['session_token'], 
+        ['expires' =>time() + 1800, 
+        'path' => "/" , 
+        'httponly' => true]
+        );
+
+        // let user accesss login after successful login
+        header("Location: home.php");
+        exit();
+        }
+        else
+            {
+                $message = $response["message"] ?? "Login failed.";
+            }
+        }
+
+}
+if($message !== "") {
+    echo "<p>" .htmlspecialchars($message) . "</p>";
+}
 ?>
 <!DOCTYPE html>
 
 <h3>Login</h3>
-<form onsubmit="return validate(this)" method="POST">
+<form method="POST">
 <div>
     <!-- enter the email or username -->
-    <label for="loginID">Email or Username</label><br>
-    <input type="text" id="loginID" name="loginID" required><br>
+    <label for="username">Email or Username</label><br>
+    <input type="text" id="username" name="username" required><br>
     
     <!-- enter the password -->    
     <label for="pwd">Password</label><br>
@@ -18,81 +78,8 @@
 </div>
 </form>
 
-<script> 
-//validating the form values
-    function validate(form) {
-        //getting values via valiate(this)
-        let email = form.loginID.value.trim();
-        let password = form.password.value;
+<br>
 
-        //checking if the email is empty
-        if (email === "") 
-        {
-            alert("Email or username must not be empty.");
-            return false;
-        }
+<!-- link to registration page -->
+ <a href="register.php">Don't have an account? Register here</a>
 
-        //validating the entered email is in the correct format
-        if (email.includes("@")) {
-            let emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email))
-            {
-                alert("Please enter a valid email address/username and password.");
-                return false;
-            }
-        }
-        // validating the username is in the correct format
-        else
-        {
-            let usernameRegex = /^[a-zA-Z0-9_-]{3,30}$/;
-            if (!usernameRegex.test(email))
-            {
-                alert("Please enter a valid email address/username and password.");
-                return false;
-            }
-        }
-        //checking if the password is empty
-         if (password === "") 
-        {
-            alert("Password must not be empty.");
-            return false;
-        }
-        // password must be atleast 8 characters
-        if (password.length < 8)
-        {
-            alert("Please enter a valid email address/username and password.");
-            return false;
-        }
-
-        sendLogin(email, password);
-
-        return false;
-    }
-
-    // This function sends the input to the login handler and receives a response
-    async function sendLogin(text, password) {
-        const response = await fetch("login_handler.php", {
-            method: "POST",
-            headers:{
-            //header tells the server the format of the request's body
-            "Content-Type": "application/json"},
-            // converts the login id and password into json to use as request body
-            body: JSON.stringify({loginID: text, password: password})
-        });
-        // waits for the server reply 
-        const data = await response.json();
-
-        // checks whether the login details are correct
-        if (data.success)
-        {
-            // if the login details are correct, it stores token into a session storage
-            sessionStorage.setItem("sessionToken", data.session_token)
-            alert("You have successfully logged in")
-        }
-        else{
-            // else tells the user that the login details were incorrect, and doesn't store them
-            alert("Oops, looks like you couldn't get in")
-        }
-        
-    }
-</script>
