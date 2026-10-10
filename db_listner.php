@@ -221,7 +221,7 @@ function requestProcessor($request){
 				);
 			case "login":
 				return doLogin(
-					$request["loginID"] ?? "",
+					$request["username"] ?? "",
 					$request["password"] ?? ""
 				);
 			case "validate_session":

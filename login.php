@@ -86,7 +86,7 @@
         if (data.success)
         {
             // if the login details are correct, it stores token into a session storage
-            sessionStorage.setItem("sessionToken", data.token)
+            sessionStorage.setItem("sessionToken", data.session_token)
             alert("You have successfully logged in")
         }
         else{
