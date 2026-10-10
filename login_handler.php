@@ -19,17 +19,17 @@ $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
 
 $request = array();
 $request['type'] = "login";
-$request['loginID'] = $loginID;
+$request['username'] = $loginID;
 $request['password'] = $password;
 //send request to rabbitmq and wait for a repky from listner
 $response = $client->send_request($request);
 
 // check if login was successful and includes a token
 if (isset($response["success"]) && $response["success"] === true 
-&& isset ($response['token']) )
+&& isset ($response['session_token']) )
     {
         //output login was successful and the token is sent to login page
-        echo json_encode(["success" => true, "token" => $response["token"]]);
+        echo json_encode(["success" => true, "session_token" => $response["session_token"], "user_id" => $response["user_id"]]);
         
     }
 else{
