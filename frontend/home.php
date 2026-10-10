@@ -8,8 +8,10 @@ $token = $_COOKIE['sessionToken'] ?? null;
 if (!$token) { header('Location: /login.php'); exit; }
 
 $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
-$resp = $client->send_request(['type' => 'validate_session', 'sessionToken' => $token]);
-if (empty($resp['valid'])) { header('Location: /login.php'); exit; }
+$resp = $client->send_request(['type' => 'validate_session', 'session_token' => $token]);
+if (empty($resp['success'])) { header('Location: /login.php'); exit; }
+
+$name = $resp['username'] ?? ('User #' . $resp['user_id']);
 ?>
-<h1>Welcome, <?= htmlspecialchars($resp['username']) ?></h1>
+<h1>Welcome, <?= htmlspecialchars($name) ?></h1>
 <a href="logout.php">Log out</a>

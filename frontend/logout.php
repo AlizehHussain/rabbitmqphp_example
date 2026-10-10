@@ -7,7 +7,7 @@ require_once('rabbitMQLib.inc');
 $token = $_COOKIE['sessionToken'] ?? null;
 if ($token) {
     $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
-    $client->send_request(['type' => 'logout', 'sessionToken' => $token]);
+    $client->send_request(['type' => 'logout', 'session_token' => $token]);
 }
 setcookie('sessionToken', '', time() - 3600, '/');
 header('Location: /login.php');
