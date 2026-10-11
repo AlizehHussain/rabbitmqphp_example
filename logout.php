@@ -8,27 +8,17 @@ require_once('rabbitMQLib.inc');
 <h1><em>Logging out...</em></h1>
 
 <script>
-async function destroySession() {	
-	const sessionToken = sessionStorage.getItem('session_token');
-	const response = await fetch("sessionValidator.php", {
+async function destroySession() {
+    const sessionToken = sessionStorage.getItem('session_token');
+    try {
+        await fetch("sessionValidator.php", {
             method: "POST",
-            headers:{
-            //header tells the server the format of the request's body
-            "Content-Type": "application/json"},
-            // converts the login id and password into json to use as request body
-            body: JSON.stringify({typeRequest:'logout', session_token: sessionToken})
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ typeRequest: 'logout', session_token: sessionToken })
         });
-        // waits for the server reply 
-        const data = await response.json();
-
-        //checks whether the session key is valid
-        if (data.success)
-        {
-            //else returns user back to login page
-            window.location.href = "login.php";
-            
-	}
+    } catch (e) {}
+    sessionStorage.removeItem('session_token');
+    window.location.href = "login.php";
 }
 destroySession();
 </script>
-
