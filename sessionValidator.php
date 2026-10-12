@@ -19,7 +19,7 @@ if ($sessionToken === "") {
 // establishing communication to rabbitmq
 $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
 
-//login request
+//token validation request
 $request = array();
 $request['type'] = "validate_session";
 $request['sessionToken'] = $sessionToken;
