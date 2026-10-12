@@ -6,8 +6,8 @@
 <form onsubmit="return validate(this)" method="POST">
 <div>
     <!-- enter the email or username -->
-    <label for="loginID">Email or Username</label><br>
-    <input type="text" id="loginID" name="loginID" required><br>
+    <label for="username">Email or Username</label><br>
+    <input type="text" id="username" name="username" required><br>
     
     <!-- enter the password -->    
     <label for="pwd">Password</label><br>
@@ -17,54 +17,31 @@
     <button type="submit">Login</button>
 </div>
 </form>
+<!-- adding link to register page -->
+<p>Don't have an account? <a href="register.php">Register here</a></p>
 
 <script> 
 //validating the form values
     function validate(form) {
         //getting values via valiate(this)
-        let email = form.loginID.value.trim();
+        let username = form.username.value.trim();
         let password = form.password.value;
 
-        //checking if the email is empty
-        if (email === "") 
+        //checking if the username is empty
+        if (username === "") 
         {
             alert("Email or username must not be empty.");
             return false;
         }
 
-        //validating the entered email is in the correct format
-        if (email.includes("@")) {
-            let emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email))
-            {
-                alert("Please enter a valid email address/username and password.");
-                return false;
-            }
-        }
-        // validating the username is in the correct format
-        else
-        {
-            let usernameRegex = /^[a-zA-Z0-9_-]{3,30}$/;
-            if (!usernameRegex.test(email))
-            {
-                alert("Please enter a valid email address/username and password.");
-                return false;
-            }
-        }
         //checking if the password is empty
          if (password === "") 
         {
             alert("Password must not be empty.");
             return false;
         }
-        // password must be atleast 8 characters
-        if (password.length < 8)
-        {
-            alert("Please enter a valid email address/username and password.");
-            return false;
-        }
 
-        sendLogin(email, password);
+        sendLogin(username, password);
 
         return false;
     }
@@ -77,7 +54,7 @@
             //header tells the server the format of the request's body
             "Content-Type": "application/json"},
             // converts the login id and password into json to use as request body
-            body: JSON.stringify({loginID: text, password: password})
+            body: JSON.stringify({username: text, password: password})
         });
         // waits for the server reply 
         const data = await response.json();
@@ -86,12 +63,14 @@
         if (data.success)
         {
             // if the login details are correct, it stores token into a session storage
-            sessionStorage.setItem("sessionToken", data.token)
-            alert("You have successfully logged in")
+            sessionStorage.setItem("session_token", data.session_token);
+            //redirect to home page
+            window.location.href = "home.php";
+            
         }
         else{
             // else tells the user that the login details were incorrect, and doesn't store them
-            alert("Oops, looks like you couldn't get in")
+            alert("Your login was unsuccessful. Please try again.")
         }
         
     }
