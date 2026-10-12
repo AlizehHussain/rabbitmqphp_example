@@ -8,6 +8,7 @@ require_once('rabbitMQLib.inc');
 $data = json_decode(file_get_contents("php://input"), true);
 
 //extracting session token from the data
+$type = $data['typeRequest'] ?? "";
 $sessionToken = $data['session_token'] ?? "";
 
 //makes sure sessionToken field is not empty
@@ -30,7 +31,7 @@ $response = $client->send_request($request);
 if (isset($response["success"]) && $response["success"] === true)
     {
         //session was validated successfully
-        //turning php array back into json to send to home
+        //turning php array back into json to send to back
         echo json_encode(
             [
             "success" => true, 

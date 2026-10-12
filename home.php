@@ -17,7 +17,7 @@ async function validateSession() {
             //header tells the server the format of the request's body
             "Content-Type": "application/json"},
             // converts the login id and password into json to use as request body
-            body: JSON.stringify({session_token: sessionToken})
+            body: JSON.stringify({typeRequest:'validate_session', session_token: sessionToken})
         });
         // waits for the server reply 
         const data = await response.json();
