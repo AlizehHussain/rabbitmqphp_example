@@ -36,5 +36,5 @@ validateSession();
 
 <body>
 <h1>Welcome!<h1>
-
+<a href="logout.php">Log Out</a>
 </body>
