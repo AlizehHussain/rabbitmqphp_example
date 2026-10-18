@@ -198,6 +198,84 @@ function doLogout($sessionToken){
 		
 	}
 
+function doSyncEvents($events){
+	if (!isarray($events) || empty($events)){
+		return [
+			"success" => false,
+			"message" => "No valid events received"
+		];
+	}
+
+	$connection = getConnection();
+
+	try {
+		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails
+
+		$stmt = $connection->prepare(
+			"INSERT INTO Events (EventID, EventName, EventDate, Venue, City, Category, TicketURL)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				EventName = VALUES(EventName),
+				EventDate = VALUES(EventDate),
+				Venue = VALUES(Venue),
+				City = VALUES(City),
+				Category = VALUES(Category),
+				TicketURL = VALUES(TicketURL)"
+		);
+
+		$count = 0;
+
+		foreach ($events as $event){
+			if(!is_array($events) || empty($event["event_id"]) || empty($event["name"])){
+				throw new Exception("Invalid event information");
+			}
+
+			$eventID = $event["event_id"];
+			$eventName = $event["name"];
+			$eventDate = $event["date"] ?? null;
+			$venue = $event["venue"] ?? "";
+			$city = $event["city"] ?? "";
+			$category = $event["category"] ?? "";
+			$ticketURL = $event["url"] ?? "";
+
+			$stmt->bind_param(
+				"sssssss",
+				$eventID,
+				$eventName,
+				$eventDate,
+				$venue,
+				$city,
+				$category,
+				$ticketURL
+			);
+
+			$stmt->execute();
+			$count++;
+		}
+
+		$stmt->close();
+
+		$connection->commit();
+
+		return [
+			"success" => true,
+			"message" => "Events synchronized successfully",
+			"count" => $count
+		];
+	} catch (Throwable $e){
+		$connection->rollback(); //undo the entire batch if something fails
+
+		error_log("Event sync error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Failed to synchronize events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
 
 function requestProcessor($request){
 	//check if we got a good request type
@@ -228,6 +306,8 @@ function requestProcessor($request){
 				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "logout":
 				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
+			case "sync_events":
+				return doSyncEvents($request["events"] ?? []);
 			default:
 				return [
 					"success" => false,
