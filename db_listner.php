@@ -199,7 +199,7 @@ function doLogout($sessionToken){
 	}
 
 function doSyncEvents($events){
-	if (!isarray($events) || empty($events)){
+	if (!is_array($events) || empty($events)){
 		return [
 			"success" => false,
 			"message" => "No valid events received"
@@ -276,6 +276,119 @@ function doSyncEvents($events){
 	}
 }
 
+//turns a  dtatabse row into the same field names the DMZ script already uses
+function formatEvent($row){
+return [
+	"event_id" => $row["EventID"],
+	"name" => $row["EventName"],
+	"date" => $row["EventDate"],
+	"venue" => $row["Venue"],
+	"city" => $row["City"],
+	"category" => $row["Category"],
+	"url" => $row["TicketURL"]
+	];
+}
+
+function doSearchEvents($keyword, $city, $category){
+	$keyword = trim($keyword);
+	$city = trim($city);
+	$category = trim($category);
+
+	$connection = getConnection();
+
+	try {
+		//this will only show upcoming events or the events with no date yet
+		$sql = "SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+				FROM Events
+				WHERE (EventDate IS NULL OR EventDate >= CURDATE())";
+		$types = "";
+		$params = [];
+
+		//escape % and _ so user input is searched literally
+		if ($keyword !== ""){
+			$like = "%" . addcslashes($keyword, "%_\\") . "%";
+			$sql .= " AND (EventName LIKE ? OR Venue LIKE ?)";
+			$types .= "ss";
+			$params[] = $like;
+			$params[] = $like;
+		}
+		if ($city !== ""){
+			$sql .= " AND City LIKE ?";
+			$types .= "s";
+			$params[] = "%" . addcslashes($city, "%_\\") . "%";
+		}
+		if ($category !== ""){
+			$sql .= " AND Category = ?";
+			$types .= "s";
+			$params[] = $category;
+		}
+
+		$sql .= " ORDER BY EventDate IS NULL, EventDate ASC LIMIT 50";
+
+		$stmt = $connection->prepare($sql);
+		if ($types !== ""){
+			$stmt->bind_param($types, ...$params);
+		}
+		$stmt->execute();
+		$result = $stmt->get_result();
+
+		$events = [];
+		while ($row = $result->fetch_assoc()){
+			$events[] = formatEvent($row);
+		}
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"events"  => $events
+		];
+	} catch (Throwable $e){
+		error_log("Event search error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Failed to search events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doGetEvent($eventId){
+	//same check as the web handler, done again here in case someone bypasses it
+	if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $eventId)){
+		return ["success" => false, "message" => "Invalid event"];
+	}
+
+	$connection = getConnection();
+
+	try {
+		$stmt = $connection->prepare(
+			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+			FROM Events WHERE EventID = ? LIMIT 1"
+		);
+		$stmt->bind_param("s", $eventId);
+		$stmt->execute();
+		$row = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+
+		if (!$row){
+			return ["success" => false, "message" => "Event not found"];
+		}
+
+		return [
+			"success" => true,
+			"event"   => formatEvent($row)
+		];
+	} catch (Throwable $e){
+		error_log("Get event error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Failed to load event"
+		];
+	} finally {
+		$connection->close();
+	}
+}
 
 function requestProcessor($request){
 	//check if we got a good request type
@@ -287,7 +400,7 @@ function requestProcessor($request){
 
 	try {
 		switch($request["type"]){
-			//gonna use register to explain the flow of this thing since its what I made
+	//gonna use register to explain the flow of this thing since its what I made
 			//register sends username,email,password to rabbitmq, requestProcessor detects the type then calls the associated function, in this case doRegister
 			//doRegister will validate the input, connect to MySQL, check for dupes, hash the password, then insert the new user
 			//success is then true if it all works, false and displays an error. The rests are basically do the exact same flow with their own little twist.
@@ -308,6 +421,16 @@ function requestProcessor($request){
 				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "sync_events":
 				return doSyncEvents($request["events"] ?? []);
+			case "search_events":
+				return doSearchEvents(
+					$request["keyword"]??"",
+                                	$request["city"]??"",
+                                	$request["category"]??""
+				);
+			case "get_event":
+				return doGetEvent($request["event_id"] ?? "");
+
+
 			default:
 				return [
 					"success" => false,
