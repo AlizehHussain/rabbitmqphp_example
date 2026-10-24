@@ -276,6 +276,202 @@ function doSyncEvents($events){
 	}
 }
 
+function doGetRec($sessionToken){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+	$userID = (int) $validation["user_id"];
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT e.Category, e.City
+			FROM UserPicks p
+			JOIN Events e ON p.EventID = e.EventID
+			WHERE p.USERID = ?"
+		);
+
+		$stmt->bind_param("i", $userID);
+		$stmt->execute();
+
+		$results = $stmt->get_results();
+
+		$categoryCounts = [];
+		$cityCounts = [];
+		$pickedCount = 0;
+
+		while ($pick = $result-fetch_assoc()){
+			$pickedCount++;
+
+			$category = strtolower(trim($pick["Category"] ?? ""));
+			$city = strtolower(trim($pick["City"] ?? ""));
+
+			if ($category !== ""){
+				$categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
+			}
+
+			if ($city !== ""){
+				$cityCounts[$city] = ($cityCounts[$city] ?? 0) + 1;
+			}
+		}
+		$stmt->close();
+
+		$stmt = $connection->prepare(
+			"SELECT e.EventID, e.EventName, e.Venue, e.City, e.Category, e.TicketURL
+			FROM Events e
+			WHERE e.EventDate >= CURDATE()
+				AND NOT EXISTS (
+					SELECT 1
+					FROM UserPicks p
+					WHERE p.UserID = ?
+					AND p.EventID = e.EventID
+				)
+			ORDER BY e.EventDate ASC
+			LIMIT 1000"
+		);
+
+		$stmt->bind_param("i", $userID);
+		$stmt->execute();
+
+		$result = $stmt->get_results();
+
+		$rec = [];
+
+		while ($event = $result->fetch_assoc()){
+			$category = strtolower(trim($event["Category"] ?? ""));
+			$city = strtolower(trim($event["City"] ?? ""));
+
+			$categoryMatches = $category !== ""
+				? ($categoryCounts[$category] ?? 0)
+				: 0;
+
+			$cityMatches = $city !== ""
+				? ($cityCounts[$city] ?? 0)
+				: 0;
+
+			//rule based scoring formula
+			$score = (40 * $categoryMatches) + (20 * $cityMatches);
+
+			//If theres a new user, show upcoming events, otherwise include matching events
+			if ($pickedCount === 0 || $score > 0){
+				$event["score"] = $score;
+				$rec[] = $event;
+			}
+		}
+
+		$stmt->close();
+
+		//sort rec by score
+		usort($recommendations, function ($x, $y){
+			if ($x["score"] !== $y["score"]){
+				return $y["score"] <=> $x["score"];
+			}
+
+			return strcmp($x["EventDate"] ?? "", $y["EventDate"] ?? "");
+		});
+
+		//return top 10 events
+		return [
+			"success" => true,
+			"message" => "Recommendations retrieved",
+			"recommendations" => array_slice($recommendations, 0, 10)
+		];
+
+	} catch (Throwable $e){
+		error_log("Recommendation error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve recommendations"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doSavePick($sessionToken, $eventID){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
+		//i do my message sending returns like this bc its easier to read and change just in case
+		return [
+			"success" => false,
+			"message" => "Invalid or expired session"
+		];
+	}
+
+	$userID = (int) $validation["user_id"];
+	$eventID = trim ((string) $eventID);
+
+	if ($eventID === ""){
+		return [
+			"success" => false,
+			"message" => "Event ID is required"
+		];
+	}
+
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT EventID
+			FROM Events
+			WHERE EventID = ?
+			LIMIT 1"
+		);
+
+		$stmt->bind_param("s", $eventID);
+		$stmt->execute();
+		$stmt->store_result();
+
+		$eventExists = $stmt->num_rows > 0;
+
+		$stmt->close();
+
+		if (!$eventExists){
+			return [
+				"success" => false,
+				"message" => "Event does not exist"
+			];
+		}
+
+		//Saving the event to the user's previous picks, the primary key should prevent duplicate slections
+		$stmt = $connection->prepare(
+			"INSERT IGNORE INTO UserPicks
+				(UserID, EventID)
+			VALUES (?, ?)"
+		); //god i hate sql
+
+		$stmt->bind_param("is", $userID, $eventID);
+
+		$stmt->execute();
+
+		$added = $stmt->affected_rows > 0;
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"message" => $added
+				? "Event saved successfully"
+				: "Event already saved"
+		];
+	} catch (Throwable $e){
+		error_log("Save pick error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to save event"
+		];
+	} finally{
+		$connection->close();
+	}
+}
 
 function requestProcessor($request){
 	//check if we got a good request type
@@ -308,6 +504,10 @@ function requestProcessor($request){
 				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "sync_events":
 				return doSyncEvents($request["events"] ?? []);
+			case "get_recommendations":
+				return doGetRec($request["session_token"] ?? "");
+			case "save_pick":
+				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
 			default:
 				return [
 					"success" => false,
