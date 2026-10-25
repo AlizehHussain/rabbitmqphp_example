@@ -473,64 +473,6 @@ function doSavePick($sessionToken, $eventID){
 	}
 }
 
-function requestProcessor($request){
-	//check if we got a good request type
-	if (!is_array($request) || !isset($request["type"])){
-		return ["success" => false, "message" => "Invalid request type"];
-	}
-
-	echo "Received request: " . $request["type"] . PHP_EOL;
-
-	try {
-		switch($request["type"]){
-			//gonna use register to explain the flow of this thing since its what I made
-			//register sends username,email,password to rabbitmq, requestProcessor detects the type then calls the associated function, in this case doRegister
-			//doRegister will validate the input, connect to MySQL, check for dupes, hash the password, then insert the new user
-			//success is then true if it all works, false and displays an error. The rests are basically do the exact same flow with their own little twist.
-			case "register":
-				return doRegister(
-					$request["username"] ?? "",
-					$request["email"] ?? "",
-					$request["password"] ?? ""
-				);
-			case "login":
-				return doLogin(
-					$request["username"] ?? "",
-					$request["password"] ?? ""
-				);
-			case "validate_session":
-				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
-			case "logout":
-				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
-			case "sync_events":
-				return doSyncEvents($request["events"] ?? []);
-			case "get_recommendations":
-				return doGetRec($request["session_token"] ?? "");
-			case "save_pick":
-				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
-			default:
-				return [
-					"success" => false,
-					"message" => "No idea what this request type is"
-				];
-			//if you notice that i'm returning instead of just breaking
-			//return passes our results back to the rabbitmq lib. if we only call the fucntion without returning,
-			//then our frontend wouldnt receive any success responses
-		}
-	} catch (Throwable $e) {
-		//should always catch errors/exceptions, you never know what can get through
-		//One example could be when MySQL just isnt working, itll tell us instead of saying nothing
-		error_log("Listener error: " . $e->getMessage());
-
-		return [
-			"success" => false,
-			"message" => "Internal server error"
-			];
-	}
-
-
-}
-
 function getUseridFromSession($sessionToken) {
 	//hashing the token yet againnn
 	$token_hash = hash('sha256', $sessionToken);
@@ -613,11 +555,140 @@ function doCreateHangout($sessionToken, $eventID, $invitees)
 		]; 
 	}
 	
+	// the following checks are done so that no person is invited twice
+	//  since there are two primary ids hangoutid and memberid
 	//santize the incoming inviteesid and make sure they are numbers and not strings
 	$invitees = array_map('intval', $invitees);
-	
-	
+	//making sure the creater of the hangout is not invited twice by 
+	// checking both the list of users and invitees
+	$invitees = array_diff($invitees, array($uid));
+	//checking there are no duplicated ids
+	$invitees = array_unique($invitees);
+
+	try {
+		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails
+		//inserting vales in hangouts table
+		$stmt = $connection->prepare(
+			"INSERT into Hangouts (EventID, CreatedID)
+			VALUES (?, ?)"
+		);
+		$stmt->bind_param("si", $eventID, $uid);
+		$stmt->execute();
+		//returns the value for an auto increment column which in this case is hangoutid
+		$hangoutID = $connection->insert_id;
+		$stmt->close();
+
+		//inserting values of the creater of hangout in hangoutmembers
+		$stmt = $connection->prepare(
+			"INSERT into HangoutMembers (HangoutID, MemberID, Response)
+			VALUES (?, ?, ?)"
+		);
+		// only insert into table if someone accepts an invite
+		$response = "accepted";
+		$memberID = $uid;
+		$stmt->bind_param("iis", $hangoutID, $memberID, $response);
+		$stmt->execute();
+		$stmt->close();
+
+		//inserting values for each person who is invited
+		$stmt = $connection->prepare(
+			"INSERT into HangoutMembers (HangoutID, MemberID)
+			VALUES (?, ?)");
+
+			$stmt->bind_param("ii", $hangoutID, $memberID);
+			//loop to enter all the invitees
+			foreach ($invitees as $guestID) {
+				$memberID = $guestID;
+				$stmt->execute();
+			}
+		$stmt->close();
+		$connection->commit();
+
+		// hangout has been created
+		return [
+			"success" => true,
+			"message" => "Hangout has been created",
+			"hangout_id" => $hangoutID
+		];
+	}
+	catch (Throwable $e) {
+		$connection->rollback(); //undo the entire batch if something fails
+
+		error_log("Hangout create error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Failed to create a hangout"
+		];
+
+	}
+	finally {
+		$connection->close();
+	}
 }
+
+function requestProcessor($request){
+	//check if we got a good request type
+	if (!is_array($request) || !isset($request["type"])){
+		return ["success" => false, "message" => "Invalid request type"];
+	}
+
+	echo "Received request: " . $request["type"] . PHP_EOL;
+
+	try {
+		switch($request["type"]){
+			//gonna use register to explain the flow of this thing since its what I made
+			//register sends username,email,password to rabbitmq, requestProcessor detects the type then calls the associated function, in this case doRegister
+			//doRegister will validate the input, connect to MySQL, check for dupes, hash the password, then insert the new user
+			//success is then true if it all works, false and displays an error. The rests are basically do the exact same flow with their own little twist.
+			case "register":
+				return doRegister(
+					$request["username"] ?? "",
+					$request["email"] ?? "",
+					$request["password"] ?? ""
+				);
+			case "login":
+				return doLogin(
+					$request["username"] ?? "",
+					$request["password"] ?? ""
+				);
+			case "validate_session":
+				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
+			case "logout":
+				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
+			case "sync_events":
+				return doSyncEvents($request["events"] ?? []);
+			case "get_recommendations":
+				return doGetRec($request["session_token"] ?? "");
+			case "save_pick":
+				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
+			case "create_hangout":
+				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
+				$request["invitees"] ?? []);
+			default:
+				return [
+					"success" => false,
+					"message" => "No idea what this request type is"
+				];
+			//if you notice that i'm returning instead of just breaking
+			//return passes our results back to the rabbitmq lib. if we only call the fucntion without returning,
+			//then our frontend wouldnt receive any success responses
+		}
+	} catch (Throwable $e) {
+		//should always catch errors/exceptions, you never know what can get through
+		//One example could be when MySQL just isnt working, itll tell us instead of saying nothing
+		error_log("Listener error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Internal server error"
+			];
+	}
+
+
+}
+
+
 // NOW WE START IT!!!!!!!!!!!
 $server = new rabbitMQServer(
 	"testRabbitMQ.ini",
