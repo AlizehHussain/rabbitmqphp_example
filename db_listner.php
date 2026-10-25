@@ -507,7 +507,7 @@ function getUseridFromSession($sessionToken) {
 	
 }
 
-function doCreateHangout($sessionToken, $eventID, $invitees) 
+function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
 	//get the user session token
 	 $result = getUseridFromSession($sessionToken);
@@ -524,7 +524,7 @@ function doCreateHangout($sessionToken, $eventID, $invitees)
 
 // check if there are other memebers inviteed and if not tell there are no guests
 // you dont wanna hangout alone :"(
-	if(!is_array($invitees) || empty ($invitees)) {
+	if(!is_array($inviteeUsernames) || empty ($inviteeUsernames)) {
 		return [
 			"success" => false,
 			"message" => "No invitees provided"
@@ -555,16 +555,56 @@ function doCreateHangout($sessionToken, $eventID, $invitees)
 		]; 
 	}
 	
-	// the following checks are done so that no person is invited twice
-	//  since there are two primary ids hangoutid and memberid
-	//santize the incoming inviteesid and make sure they are numbers and not strings
-	$invitees = array_map('intval', $invitees);
-	//making sure the creater of the hangout is not invited twice by 
-	// checking both the list of users and invitees
-	$invitees = array_diff($invitees, array($uid));
+	//santize the incoming invitees usernames and make sure there is no whitespace
+	$inviteeUsernames = array_map('trim', $inviteeUsernames);
+	// remove any balnk values
+	$inviteeUsernames = array_filter($inviteeUsernames);
 	//checking there are no duplicated ids
-	$invitees = array_unique($invitees);
+	$inviteeUsernames = array_unique($inviteeUsernames);
 
+	//array to save the user ids in
+	$inviteeIDs =[];
+	// check if the username even exist 
+	$stmt = $connection->prepare(
+		"SELECT uid 
+		FROM users
+		WHERE username = ?"
+	);
+	
+	$stmt->bind_param("s", $username);
+	// add every user invited 
+	foreach ($inviteeUsernames as $username){
+		$stmt->execute();
+		$stmt_result = $stmt->get_result();
+		$row = $stmt_result->fetch_assoc();
+	// checking if the database had no reults for finding the user
+		if (!$row) {
+			$stmt->close();
+			return [
+				// return user not found if it does not exist
+				"success" => false,
+				"message" => "User not found" 
+				]; 
+			}
+
+		$inviteeIDs[] = $row ['uid'];
+
+	}
+	$stmt->close();
+	// removing the creater since thay have been already added to the group
+	$inviteeIDs = array_diff($inviteeIDs, [$uid]);
+	//checking for duplicate ids
+	$inviteeIDs = array_unique($inviteeIDs);
+
+	//dont allow the creater to create hangout for theirselves only
+	if (empty($inviteeIDs)) {
+		return [
+			"success" => false,
+			"message" => "Please add at least one more person to create a hangout"
+		];
+	}
+	
+	
 	try {
 		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails
 		//inserting vales in hangouts table
@@ -583,7 +623,7 @@ function doCreateHangout($sessionToken, $eventID, $invitees)
 			"INSERT into HangoutMembers (HangoutID, MemberID, Response)
 			VALUES (?, ?, ?)"
 		);
-		// only insert into table if someone accepts an invite
+		// creater of the group obviously accepts the invite and is added 
 		$response = "accepted";
 		$memberID = $uid;
 		$stmt->bind_param("iis", $hangoutID, $memberID, $response);
@@ -597,7 +637,7 @@ function doCreateHangout($sessionToken, $eventID, $invitees)
 
 			$stmt->bind_param("ii", $hangoutID, $memberID);
 			//loop to enter all the invitees
-			foreach ($invitees as $guestID) {
+			foreach ($inviteeIDs as $guestID) {
 				$memberID = $guestID;
 				$stmt->execute();
 			}
@@ -664,7 +704,7 @@ function requestProcessor($request){
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
 			case "create_hangout":
 				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
-				$request["invitees"] ?? []);
+				$request["invitee_usernames"] ?? []);
 			default:
 				return [
 					"success" => false,
