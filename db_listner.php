@@ -199,7 +199,7 @@ function doLogout($sessionToken){
 	}
 
 function doSyncEvents($events){
-	if (!isarray($events) || empty($events)){
+	if (!is_array($events) || empty($events)){
 		return [
 			"success" => false,
 			"message" => "No valid events received"
@@ -226,7 +226,7 @@ function doSyncEvents($events){
 		$count = 0;
 
 		foreach ($events as $event){
-			if(!is_array($events) || empty($event["event_id"]) || empty($event["name"])){
+			if(!is_array($event) || empty($event["event_id"]) || empty($event["name"])){
 				throw new Exception("Invalid event information");
 			}
 
@@ -299,13 +299,13 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$results = $stmt->get_results();
+		$results = $stmt->get_result();
 
 		$categoryCounts = [];
 		$cityCounts = [];
 		$pickedCount = 0;
 
-		while ($pick = $result-fetch_assoc()){
+		while ($pick = $result->fetch_assoc()){
 			$pickedCount++;
 
 			$category = strtolower(trim($pick["Category"] ?? ""));
@@ -322,7 +322,7 @@ function doGetRec($sessionToken){
 		$stmt->close();
 
 		$stmt = $connection->prepare(
-			"SELECT e.EventID, e.EventName, e.Venue, e.City, e.Category, e.TicketURL
+			"SELECT e.EventID, e.EventName, e.EventDate,  e.Venue, e.City, e.Category, e.TicketURL
 			FROM Events e
 			WHERE e.EventDate >= CURDATE()
 				AND NOT EXISTS (
@@ -338,9 +338,9 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_results();
+		$result = $stmt->get_result();
 
-		$rec = [];
+		$recommendations = [];
 
 		while ($event = $result->fetch_assoc()){
 			$category = strtolower(trim($event["Category"] ?? ""));
@@ -360,7 +360,7 @@ function doGetRec($sessionToken){
 			//If theres a new user, show upcoming events, otherwise include matching events
 			if ($pickedCount === 0 || $score > 0){
 				$event["score"] = $score;
-				$rec[] = $event;
+				$recommendations[] = $event;
 			}
 		}
 
@@ -473,6 +473,45 @@ function doSavePick($sessionToken, $eventID){
 	}
 }
 
+function doGetEvents(){
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+			FROM Events
+			WHERE EventDate >= CURDATE()
+			ORDER BY EventDate ASC
+			LIMIT 50"
+		);
+
+		$stmt->execute();
+		$results = $stmt->get_results();
+
+		$events = [];
+
+		while ($event = $result->fetch_assoc()){
+			$event[] = $event;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"events" => $events
+		];
+	} catch (Throwable $e){
+		error_log("Get events error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
 function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
@@ -508,6 +547,8 @@ function requestProcessor($request){
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
+			case "get_events":
+				return doGetEvents();
 			default:
 				return [
 					"success" => false,
