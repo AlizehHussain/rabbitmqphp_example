@@ -527,6 +527,96 @@ function requestProcessor($request){
 			"message" => "Internal server error"
 			];
 	}
+
+
+}
+
+function getUseridFromSession($sessionToken) {
+	//hashing the token yet againnn
+	$token_hash = hash('sha256', $sessionToken);
+	$connection = getConnection();
+	$stmt = $connection->prepare(
+		// get the session token from tht table
+		"SELECT uid
+		FROM sessions
+		WHERE session_token = ? AND expires_time > NOW()
+		LIMIT 1"
+	);
+	//bind the parametersS
+	$stmt->bind_param("s", $token_hash);
+	//execute the query
+	$stmt->execute();
+	/// get the result of the query
+	$stmt_result = $stmt->get_result();
+	// close the query
+	$stmt->close();
+	// from result fetch associative array
+	if ($row = $stmt_result->fetch_assoc()) {
+		return [
+			// session valid, return user id to front end
+			"user_id" => $row['uid']
+		];
+	}
+
+	return [
+		// returning nothing when session is invalid
+		"user_id" => null
+	]; 
+	
+}
+
+function doCreateHangout($sessionToken, $eventID, $invitees) 
+{
+	//get the user session token
+	 $result = getUseridFromSession($sessionToken);
+	// check if the session is still valid by checking if user id exists
+	if ( $result["user_id"] === null) {
+		return [
+			"success" => false,
+			"message" => "Invalid or expired session",
+		];
+
+	}
+
+	$uid = $result["user_id"];
+
+// check if there are other memebers inviteed and if not tell there are no guests
+// you dont wanna hangout alone :"(
+	if(!is_array($invitees) || empty ($invitees)) {
+		return [
+			"success" => false,
+			"message" => "No invitees provided"
+		];
+	}
+	$connection = getConnection();
+	// check if the event even exists in the database
+	$stmt = $connection->prepare(
+		"SELECT EventID
+		FROM Events
+		WHERE EventID = ? 
+		LIMIT 1"
+	);
+	$stmt->bind_param("s", $eventID);
+	//execute the query
+	$stmt->execute();
+	/// get the result of the query
+	$stmt_result = $stmt->get_result();
+	// close the query
+	$stmt->close();
+// checking if the database had no reults for finding the event
+
+	if (!$row = $stmt_result->fetch_assoc()) {
+		return [
+		// return event not found if it does not exist
+		"success" => false,
+		"message" => "Event not found" 
+		]; 
+	}
+	
+	//santize the incoming inviteesid and make sure they are numbers and not strings
+	$invitees = array_map('intval', $invitees);
+	
+	
 }
 // NOW WE START IT!!!!!!!!!!!
 $server = new rabbitMQServer(
