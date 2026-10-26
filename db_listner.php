@@ -199,7 +199,7 @@ function doLogout($sessionToken){
 	}
 
 function doSyncEvents($events){
-	if (!is_array($events) || empty($events)){
+	if (!isarray($events) || empty($events)){
 		return [
 			"success" => false,
 			"message" => "No valid events received"
@@ -226,7 +226,7 @@ function doSyncEvents($events){
 		$count = 0;
 
 		foreach ($events as $event){
-			if(!is_array($event) || empty($event["event_id"]) || empty($event["name"])){
+			if(!is_array($events) || empty($event["event_id"]) || empty($event["name"])){
 				throw new Exception("Invalid event information");
 			}
 
@@ -299,13 +299,13 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$results = $stmt->get_result();
+		$results = $stmt->get_results();
 
 		$categoryCounts = [];
 		$cityCounts = [];
 		$pickedCount = 0;
 
-		while ($pick = $result->fetch_assoc()){
+		while ($pick = $result-fetch_assoc()){
 			$pickedCount++;
 
 			$category = strtolower(trim($pick["Category"] ?? ""));
@@ -322,7 +322,7 @@ function doGetRec($sessionToken){
 		$stmt->close();
 
 		$stmt = $connection->prepare(
-			"SELECT e.EventID, e.EventName, e.EventDate,  e.Venue, e.City, e.Category, e.TicketURL
+			"SELECT e.EventID, e.EventName, e.Venue, e.City, e.Category, e.TicketURL
 			FROM Events e
 			WHERE e.EventDate >= CURDATE()
 				AND NOT EXISTS (
@@ -338,9 +338,9 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_result();
+		$result = $stmt->get_results();
 
-		$recommendations = [];
+		$rec = [];
 
 		while ($event = $result->fetch_assoc()){
 			$category = strtolower(trim($event["Category"] ?? ""));
@@ -360,7 +360,7 @@ function doGetRec($sessionToken){
 			//If theres a new user, show upcoming events, otherwise include matching events
 			if ($pickedCount === 0 || $score > 0){
 				$event["score"] = $score;
-				$recommendations[] = $event;
+				$rec[] = $event;
 			}
 		}
 
@@ -473,41 +473,196 @@ function doSavePick($sessionToken, $eventID){
 	}
 }
 
-function doGetEvents(){
+function getUseridFromSession($sessionToken) {
+	//hashing the token yet againnn
+	$token_hash = hash('sha256', $sessionToken);
 	$connection = getConnection();
+	$stmt = $connection->prepare(
+		// get the session token from tht table
+		"SELECT uid
+		FROM sessions
+		WHERE session_token = ? AND expires_time > NOW()
+		LIMIT 1"
+	);
+	//bind the parametersS
+	$stmt->bind_param("s", $token_hash);
+	//execute the query
+	$stmt->execute();
+	/// get the result of the query
+	$stmt_result = $stmt->get_result();
+	// close the query
+	$stmt->close();
+	// from result fetch associative array
+	if ($row = $stmt_result->fetch_assoc()) {
+		return [
+			// session valid, return user id to front end
+			"user_id" => $row['uid']
+		];
+	}
 
-	try{
-		$stmt = $connection->prepare(
-			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
-			FROM Events
-			WHERE EventDate >= CURDATE()
-			ORDER BY EventDate ASC
-			LIMIT 50"
-		);
+	return [
+		// returning nothing when session is invalid
+		"user_id" => null
+	]; 
+	
+}
 
+function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
+{
+	//get the user session token
+	 $result = getUseridFromSession($sessionToken);
+	// check if the session is still valid by checking if user id exists
+	if ( $result["user_id"] === null) {
+		return [
+			"success" => false,
+			"message" => "Invalid or expired session",
+		];
+
+	}
+
+	$uid = $result["user_id"];
+
+// check if there are other memebers inviteed and if not tell there are no guests
+// you dont wanna hangout alone :"(
+	if(!is_array($inviteeUsernames) || empty ($inviteeUsernames)) {
+		return [
+			"success" => false,
+			"message" => "No invitees provided"
+		];
+	}
+	$connection = getConnection();
+	// check if the event even exists in the database
+	$stmt = $connection->prepare(
+		"SELECT EventID
+		FROM Events
+		WHERE EventID = ? 
+		LIMIT 1"
+	);
+	$stmt->bind_param("s", $eventID);
+	//execute the query
+	$stmt->execute();
+	/// get the result of the query
+	$stmt_result = $stmt->get_result();
+	// close the query
+	$stmt->close();
+// checking if the database had no reults for finding the event
+
+	if (!$row = $stmt_result->fetch_assoc()) {
+		return [
+		// return event not found if it does not exist
+		"success" => false,
+		"message" => "Event not found" 
+		]; 
+	}
+	
+	//santize the incoming invitees usernames and make sure there is no whitespace
+	$inviteeUsernames = array_map('trim', $inviteeUsernames);
+	// remove any balnk values
+	$inviteeUsernames = array_filter($inviteeUsernames);
+	//checking there are no duplicated ids
+	$inviteeUsernames = array_unique($inviteeUsernames);
+
+	//array to save the user ids in
+	$inviteeIDs =[];
+	// check if the username even exist 
+	$stmt = $connection->prepare(
+		"SELECT uid 
+		FROM users
+		WHERE username = ?"
+	);
+	
+	$stmt->bind_param("s", $username);
+	// add every user invited 
+	foreach ($inviteeUsernames as $username){
 		$stmt->execute();
-		$results = $stmt->get_results();
+		$stmt_result = $stmt->get_result();
+		$row = $stmt_result->fetch_assoc();
+	// checking if the database had no reults for finding the user
+		if (!$row) {
+			$stmt->close();
+			return [
+				// return user not found if it does not exist
+				"success" => false,
+				"message" => "User not found" 
+				]; 
+			}
 
-		$events = [];
+		$inviteeIDs[] = $row ['uid'];
 
-		while ($event = $result->fetch_assoc()){
-			$event[] = $event;
-		}
+	}
+	$stmt->close();
+	// removing the creater since thay have been already added to the group
+	$inviteeIDs = array_diff($inviteeIDs, [$uid]);
+	//checking for duplicate ids
+	$inviteeIDs = array_unique($inviteeIDs);
 
+	//dont allow the creater to create hangout for theirselves only
+	if (empty($inviteeIDs)) {
+		return [
+			"success" => false,
+			"message" => "Please add at least one more person to create a hangout"
+		];
+	}
+	
+	
+	try {
+		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails
+		//inserting vales in hangouts table
+		$stmt = $connection->prepare(
+			"INSERT into Hangouts (EventID, CreatedID)
+			VALUES (?, ?)"
+		);
+		$stmt->bind_param("si", $eventID, $uid);
+		$stmt->execute();
+		//returns the value for an auto increment column which in this case is hangoutid
+		$hangoutID = $connection->insert_id;
 		$stmt->close();
 
+		//inserting values of the creater of hangout in hangoutmembers
+		$stmt = $connection->prepare(
+			"INSERT into HangoutMembers (HangoutID, MemberID, Response)
+			VALUES (?, ?, ?)"
+		);
+		// creater of the group obviously accepts the invite and is added 
+		$response = "accepted";
+		$memberID = $uid;
+		$stmt->bind_param("iis", $hangoutID, $memberID, $response);
+		$stmt->execute();
+		$stmt->close();
+
+		//inserting values for each person who is invited
+		$stmt = $connection->prepare(
+			"INSERT into HangoutMembers (HangoutID, MemberID)
+			VALUES (?, ?)");
+
+			$stmt->bind_param("ii", $hangoutID, $memberID);
+			//loop to enter all the invitees
+			foreach ($inviteeIDs as $guestID) {
+				$memberID = $guestID;
+				$stmt->execute();
+			}
+		$stmt->close();
+		$connection->commit();
+
+		// hangout has been created
 		return [
 			"success" => true,
-			"events" => $events
+			"message" => "Hangout has been created",
+			"hangout_id" => $hangoutID
 		];
-	} catch (Throwable $e){
-		error_log("Get events error: " . $e->getMessage());
+	}
+	catch (Throwable $e) {
+		$connection->rollback(); //undo the entire batch if something fails
+
+		error_log("Hangout create error: " . $e->getMessage());
 
 		return [
 			"success" => false,
-			"message" => "Unable to retrieve events"
+			"message" => "Failed to create a hangout"
 		];
-	} finally {
+
+	}
+	finally {
 		$connection->close();
 	}
 }
@@ -547,8 +702,9 @@ function requestProcessor($request){
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
-			case "get_events":
-				return doGetEvents();
+			case "create_hangout":
+				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
+				$request["invitee_usernames"] ?? []);
 			default:
 				return [
 					"success" => false,
@@ -572,93 +728,7 @@ function requestProcessor($request){
 
 }
 
-function getUseridFromSession($sessionToken) {
-	//hashing the token yet againnn
-	$token_hash = hash('sha256', $sessionToken);
-	$connection = getConnection();
-	$stmt = $connection->prepare(
-		// get the session token from tht table
-		"SELECT uid
-		FROM sessions
-		WHERE session_token = ? AND expires_time > NOW()
-		LIMIT 1"
-	);
-	//bind the parametersS
-	$stmt->bind_param("s", $token_hash);
-	//execute the query
-	$stmt->execute();
-	/// get the result of the query
-	$stmt_result = $stmt->get_result();
-	// close the query
-	$stmt->close();
-	// from result fetch associative array
-	if ($row = $stmt_result->fetch_assoc()) {
-		return [
-			// session valid, return user id to front end
-			"user_id" => $row['uid']
-		];
-	}
 
-	return [
-		// returning nothing when session is invalid
-		"user_id" => null
-	]; 
-	
-}
-
-function doCreateHangout($sessionToken, $eventID, $invitees) 
-{
-	//get the user session token
-	 $result = getUseridFromSession($sessionToken);
-	// check if the session is still valid by checking if user id exists
-	if ( $result["user_id"] === null) {
-		return [
-			"success" => false,
-			"message" => "Invalid or expired session",
-		];
-
-	}
-
-	$uid = $result["user_id"];
-
-// check if there are other memebers inviteed and if not tell there are no guests
-// you dont wanna hangout alone :"(
-	if(!is_array($invitees) || empty ($invitees)) {
-		return [
-			"success" => false,
-			"message" => "No invitees provided"
-		];
-	}
-	$connection = getConnection();
-	// check if the event even exists in the database
-	$stmt = $connection->prepare(
-		"SELECT EventID
-		FROM Events
-		WHERE EventID = ? 
-		LIMIT 1"
-	);
-	$stmt->bind_param("s", $eventID);
-	//execute the query
-	$stmt->execute();
-	/// get the result of the query
-	$stmt_result = $stmt->get_result();
-	// close the query
-	$stmt->close();
-// checking if the database had no reults for finding the event
-
-	if (!$row = $stmt_result->fetch_assoc()) {
-		return [
-		// return event not found if it does not exist
-		"success" => false,
-		"message" => "Event not found" 
-		]; 
-	}
-	
-	//santize the incoming inviteesid and make sure they are numbers and not strings
-	$invitees = array_map('intval', $invitees);
-	
-	
-}
 // NOW WE START IT!!!!!!!!!!!
 $server = new rabbitMQServer(
 	"testRabbitMQ.ini",
