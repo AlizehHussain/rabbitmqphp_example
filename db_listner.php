@@ -473,39 +473,7 @@ function doSavePick($sessionToken, $eventID){
 	}
 }
 
-function getUseridFromSession($sessionToken) {
-	//hashing the token yet againnn
-	$token_hash = hash('sha256', $sessionToken);
-	$connection = getConnection();
-	$stmt = $connection->prepare(
-		// get the session token from tht table
-		"SELECT uid
-		FROM sessions
-		WHERE session_token = ? AND expires_time > NOW()
-		LIMIT 1"
-	);
-	//bind the parametersS
-	$stmt->bind_param("s", $token_hash);
-	//execute the query
-	$stmt->execute();
-	/// get the result of the query
-	$stmt_result = $stmt->get_result();
-	// close the query
-	$stmt->close();
-	// from result fetch associative array
-	if ($row = $stmt_result->fetch_assoc()) {
-		return [
-			// session valid, return user id to front end
-			"user_id" => $row['uid']
-		];
-	}
 
-	return [
-		// returning nothing when session is invalid
-		"user_id" => null
-	]; 
-	
-}
 
 function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
