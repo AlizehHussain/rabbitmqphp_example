@@ -14,7 +14,8 @@ $session_token = $data['session_token'] ?? "";
 $eventID = $data['event_id'] ?? "";
 $usernames = $data['invitee_usernames'] ?? [];
 
-if ($session_token === "" || $eventID === "" || empty($usernames)) {
+// making sure token, event id and usernames are not empty
+if ($session_token === "" || $eventID === "" || empty($usernames) || is_array($usernames)){
     // dont let anyone create a hangout if the fields are empty!!!
     echo json_encode([
         "success" => false,
@@ -24,37 +25,37 @@ if ($session_token === "" || $eventID === "" || empty($usernames)) {
 }
 
 try {
-    // establishing communication to rabbitmq
-$client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
+// establishing communication to rabbitmq
+    $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
 
 //create hangout request
-$request = array();
-$request['type'] = "create_hangout";
-$request['session_token'] = $session_token;
-$request['event_id'] = $eventID;
-$request['invitee_usernames'] = $usernames;
+    $request = array();
+    $request['type'] = "create_hangout";
+    $request['session_token'] = $session_token;
+    $request['event_id'] = $eventID;
+    $request['invitee_usernames'] = $usernames;
 
 //send request to rabbitmq and wait for a reply from listner
-$response = $client->send_request($request);
-
-if(!is_array($response)) {
-    echo json_encode ([
-        "success" => false,
-        "message" => "Unknown error occured"
-    ]);
-}
-
-echo json_encode([
-        "success" => false,
-        "message" => $response
-        ]);
+    $response = $client->send_request($request);
+    // if request failed send a message  and set success to false and end loop
+    if(!is_array($response)) {
+        echo json_encode ([
+            "success" => false,
+            "message" => "Unknown error occurred"
+             ]);
+             }
+             exit;
+    // send response from db listner
+    echo json_encode($response );
     
 } catch (\Throwable $th) {
-    error_log("Creation of hangout was unsuccessful");
-
+    // tell me if anything goes wrong
+   
+    error_log("Creation of hangout was unsuccessful: " . $th->getMessage());
+// any other error occur tell the user that it was unsuccessful
     echo json_encode([
         "success" => false,
-        "message" => $response
+        "message" => "Internal server error"
         ]);
 }
 
