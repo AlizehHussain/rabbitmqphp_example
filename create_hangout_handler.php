@@ -4,9 +4,7 @@ require_once ('path.inc');
 require_once ('get_host_info.inc');
 require_once('rabbitMQLib.inc');
 
-// read the input the hangout page sends
-// file get contents reads raw data from body of  request
-//&convert json into php array throug json decode
+// get the input from html
 $data = json_decode(file_get_contents("php://input"), true);
 
 //extracting token, event id and invitees from the data array
@@ -15,7 +13,7 @@ $eventID = $data['event_id'] ?? "";
 $usernames = $data['invitee_usernames'] ?? [];
 
 // making sure token, event id and usernames are not empty
-if ($session_token === "" || $eventID === "" || empty($usernames) || is_array($usernames)){
+if ($session_token === "" || $eventID === "" || empty($usernames) || !is_array($usernames)){
     // dont let anyone create a hangout if the fields are empty!!!
     echo json_encode([
         "success" => false,
@@ -23,6 +21,7 @@ if ($session_token === "" || $eventID === "" || empty($usernames) || is_array($u
         ]);
     exit;
 }
+
 
 try {
 // establishing communication to rabbitmq
@@ -43,8 +42,9 @@ try {
             "success" => false,
             "message" => "Unknown error occurred"
              ]);
+        exit;
              }
-             exit;
+            
     // send response from db listner
     echo json_encode($response );
     
