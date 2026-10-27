@@ -22,7 +22,11 @@ $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
 
 //token validation request
 $request = array();
-$request['type'] = "validate_session";
+if (!in_array($type, ["validate_session", "logout"], true)) {
+    echo json_encode(["success" => false]);
+    exit;
+}
+$request['type'] = $type;
 $request['sessionToken'] = $sessionToken;
 //send request to rabbitmq and wait for a reply from listner
 $response = $client->send_request($request);
