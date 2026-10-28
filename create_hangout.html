@@ -58,6 +58,23 @@
         return false;
     }
 
+    async function loadEvents() {
+    const response = await fetch("get_events_handler.php");
+    const data = await response.json();
+
+    if (data.success) {
+        data.events.forEach(event => {
+            console.log(event.EventName);
+            console.log(event.EventDate);
+            console.log(event.Venue);
+            console.log(event.City);
+            console.log(event.TicketURL);
+        });
+    }
+}
+
+loadEvents();
+
     // This function sends the input to the hanngout handler and receives a response
     async function sendHangout(session_token, eventID, usernames) {
 
