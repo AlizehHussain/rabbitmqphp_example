@@ -1,11 +1,11 @@
 <?php
 	//literal simple db connection code
 	// i used a 13 year old stackoverflow post for referencew, YOLO.
-	$host = getenv("DB_HOST");
-	$username = getenv("DB_USER");
+	$host = getenv("DB_HOST") ?: "localhost";
+	$username = getenv("DB_USER") ?: "webapp";
 	$password = getenv("DB_PASSWORD");
-	$database = getenv("DB_NAME");
-	$port = (int) (getenv("DB_PORT"));
+	$database = getenv("DB_NAME") ?: "webdb";
+	$port = (int) (getenv("DB_PORT")) ?: 3306;
 
 	if ($password === false){
 		throw new RuntimeException("DB_PASSWORD env var is not set.");
