@@ -954,7 +954,69 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 function doGetFriends($sessionToken){
 	$validation = doValidate($sessionToken);
 
-	if (!is_array($validation) ||
+	if (!is_array($validation) || ($validation["successs"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+
+	$userID = (int) $validation["user_id"];
+
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT
+				u.uid,
+				u.username,
+				f.FriendID
+			FROM Friends f
+			JOIN users u
+				ON u.uid = CASE
+					WHEN f.SenderID = ? THEN f.ReceiverID
+					ELSE f.SenderID
+				END
+			WHERE
+				(f.SenderID = ? OR f.ReceiverID = ?)
+				AND f.Status = 'accepted'
+			ORDER BY u.username ASC"
+		);
+
+		$stmt->bind_param(
+			"iii",
+			$userID,
+			$userID,
+			$userID
+		);
+
+		$stmt->execute();
+
+		$result = $stmt->get_results();
+
+		$friends = [];
+
+		while ($row = $result->fetch_assoc()){
+			$friends[] = $row;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"message" => "Friends retrieve succcessfully",
+			"friends" => $friends
+		];
+	} catch (Throwable $e){
+		error_log("Get friends error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve friends"
+		];
+	} finally {
+		$connection->close();
+	}
 }
 
 function requestProcessor($request){
@@ -1003,6 +1065,8 @@ function requestProcessor($request){
 				return dogGetFriendRequests($request["session_token"] ?? "");
 			case "respond_friend_request":
 				return doRespondFriendRequest($request["session_token"] ?? "", $request["friend_id"] ?? 0, $request["action"] ?? "");
+			case "get_friends":
+				return doGetFriends($request["session_token"] ?? "");
 			default:
 				return [
 					"success" => false,
