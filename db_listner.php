@@ -482,14 +482,14 @@ function doSavePick($sessionToken, $eventID){
 function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
 	//get the user session token
-	 $result = getUseridFromSession($sessionToken);
+	 $result = doValidate($sessionToken);
 	// check if the session is still valid by checking if user id exists
-	if ( $result["user_id"] === null) {
+	if (!is_array($result) || ($result["success"] ?? false) !== true){
+		//i do my message sending returns like this bc its easier to read and change just in case
 		return [
 			"success" => false,
-			"message" => "Invalid or expired session",
+			"message" => "Invalid or expired session"
 		];
-
 	}
 
 	$uid = $result["user_id"];
