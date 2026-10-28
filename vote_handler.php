@@ -9,7 +9,7 @@ $data = json_decode(file_get_contents("php://input"), true);
 
 //extracting token, event id and invitees from the data array
 $session_token = $data['session_token'] ?? "";
-$suggestiontID = $data['suggestion_id'] ?? "";
+$suggestionID = $data['suggestion_id'] ?? "";
 
 
 
@@ -30,7 +30,7 @@ try {
 
 //create hangout request
     $request = array();
-    $request['type'] = "suggest_event";
+    $request['type'] = "vote_event";
     $request['session_token'] = $session_token;
     $request['suggestion_id'] = $suggestionID;
     
@@ -53,7 +53,7 @@ try {
 } catch (\Throwable $th) {
     // tell me if anything goes wrong
    
-    error_log("ESuggestion of even was unsuccessful: " . $th->getMessage());
+    error_log("Voting of event was unsuccessful: " . $th->getMessage());
 // any other error occur tell the user that it was unsuccessful
     echo json_encode([
         "success" => false,
