@@ -1062,7 +1062,7 @@ function requestProcessor($request){
 			case "send_friend_request":
 				return doSendFriendRequest($request["session_token"] ?? "", $request["friend_username"] ?? "");
 			case "get_friend_requests":
-				return dogGetFriendRequests($request["session_token"] ?? "");
+				return doGetFriendRequests($request["session_token"] ?? "");
 			case "respond_friend_request":
 				return doRespondFriendRequest($request["session_token"] ?? "", $request["friend_id"] ?? 0, $request["action"] ?? "");
 			case "get_friends":
