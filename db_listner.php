@@ -515,11 +515,12 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	$stmt->execute();
 	/// get the result of the query
 	$stmt_result = $stmt->get_result();
+	$row = $stmt_result->fetch_assoc();
 	// close the query
 	$stmt->close();
 // checking if the database had no reults for finding the event
 
-	if (!$row = $stmt_result->fetch_assoc()) {
+	if (!row) {
 		return [
 		// return event not found if it does not exist
 		"success" => false,
@@ -542,7 +543,7 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 		FROM users
 		WHERE username = ?"
 	);
-	
+	$username = "";
 	$stmt->bind_param("s", $username);
 	// add every user invited 
 	foreach ($inviteeUsernames as $username){

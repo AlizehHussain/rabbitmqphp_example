@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+
+<h3>Create Hangout</h3>
+<form onsubmit="return validate(this)" method="POST">
+<div>
+    <!-- select event -->    
+    <label for="event_id">Event</label><br>
+    <select id="event_id" name="event_id" required></select><br>    
+
+    <!-- invite user ids  -->    
+    <label for="Invitees">Friend usernames (separated by comma)</label><br>
+    <input type="text" id="Invitees" name="Invitees" placeholder="friend1, friend2" required><br>
+
+    <!-- adding button for creating hangout -->
+    <button type="submit">Create</button>
+</div>
+</form>
+<p id="message"></p>
+<!-- adding link to home page -->
+<p>Go back to home <a href="home.php">Home</a></p>
+
+<script> 
+//validating the form values
+    function validate(form) {
+        //read session token
+        let session_token = sessionStorage.getItem("session_token");
+        //dont let them do anything if they are not logged in
+        if (!session_token ) {
+            alert("Please log in first");
+           return false;
+        }
+        //read event id
+        let eventID = form.event_id.value.trim();
+        // check if event is not empty
+        if(!eventID) {
+            alert("Please choose an event");
+            return false;
+        }
+
+        // read the usernames
+        let usernames = form.Invitees.value;
+        //separate the usernames courtesy of mdn
+        usernames = usernames.split(",");
+        // trim to remove whitespace from each username
+        usernames.forEach((item, index) => {
+            usernames[index] = item.trim();
+        })
+        // filter out any blank values
+        usernames = usernames.filter(Boolean)
+        // check if usernames are not provided
+        if(usernames.length == 0){
+            alert("Please add the friend's usernames");
+            return false;
+        }
+        
+        sendHangout(session_token, eventID, usernames);
+
+        return false;
+    }
+
+    // This function sends the input to the hanngout handler and receives a response
+    async function sendHangout(session_token, eventID, usernames) {
+
+        //get the message paragraph to be displayed for the user
+        const messagebox = document.getElementById('message');
+        
+        try {
+            const response = await fetch("create_hangout_handler.php", {
+            method: "POST",
+            headers:{
+            //header tells the server the format of the request's body
+            "Content-Type": "application/json"},
+            // converts the session token, event id and usernames into json to use as request body
+            body: JSON.stringify({session_token:session_token, event_id:eventID, invitee_usernames:usernames})
+        });
+        // waits for the server reply 
+        const data = await response.json();
+        
+        // set the reply into paragraph and a message if there is no reply 
+        messagebox.textContent = data.message || "No message about hangout being confirmed";
+            
+        } catch (error) {
+            //failure message for user
+            messagebox.textContent = "Creation of hangout failed! Please try again";
+            console.error(error);
+            
+        }
+        
+    }
+</script>
