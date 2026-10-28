@@ -510,14 +510,13 @@ function getUseridFromSession($sessionToken) {
 function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
 	//get the user session token
-	 $result = getUseridFromSession($sessionToken);
+	 $result = doValidate($sessionToken);
 	// check if the session is still valid by checking if user id exists
-	if ( $result["user_id"] === null) {
+	if (!is_array($result) || ($result["user_id"] ?? false) === null) {
 		return [
 			"success" => false,
-			"message" => "Invalid or expired session",
+			"message" => "Invalid or expired session"
 		];
-
 	}
 
 	$uid = $result["user_id"];
@@ -543,11 +542,12 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	$stmt->execute();
 	/// get the result of the query
 	$stmt_result = $stmt->get_result();
+	$row = $stmt_result->fetch_assoc();
 	// close the query
 	$stmt->close();
 // checking if the database had no reults for finding the event
 
-	if (!$row = $stmt_result->fetch_assoc()) {
+	if (!$row) {
 		return [
 		// return event not found if it does not exist
 		"success" => false,
@@ -571,9 +571,10 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 		WHERE username = ?"
 	);
 	
-	$stmt->bind_param("s", $username);
+	
 	// add every user invited 
 	foreach ($inviteeUsernames as $username){
+		$stmt->bind_param("s", $username);
 		$stmt->execute();
 		$stmt_result = $stmt->get_result();
 		$row = $stmt_result->fetch_assoc();
@@ -667,6 +668,476 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	}
 }
 
+function doSuggestEvent ($sessionToken, $hangoutID, $eventID) {
+	//get the user session token
+	 $result = doValidate($sessionToken);
+	// check if the session is still valid by checking if user id exists
+	if (!is_array($result) || ($result["user_id"] ?? false) === null) {
+		return [
+			"success" => false,
+			"message" => "Invalid or expired session"
+		];
+	}
+
+	$uid = $result["user_id"];
+	$connection = getConnection();
+	// check if the event even exists in the database
+	try {
+		$stmt = $connection->prepare(
+		"INSERT into HangoutSuggestions (HangoutID, EventID, SuggestedBy)
+			VALUES (?, ?, ?)"
+	);
+	$stmt->bind_param("isi", $HangoutID, $eventID, $uid);
+	//execute the query
+	$stmt->execute();
+	// close the query
+	$stmt->close();
+
+	// checking if the database had no reults for suggesting the event
+
+	return[
+		"success" => true,
+		"message" => "Event suggestion added!!"];
+		
+	} catch (\Throwable $e) {
+		//throw error something else goes wrong
+		error_log("Event suggestion error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Failed to suggest the event"
+		];
+	}
+
+}
+
+function doVote ($sessionToken, $HangoutSuggestionID) {
+	//get the user session token
+	 $result = doValidate($sessionToken);
+	// check if the session is still valid by checking if user id exists
+	if (!is_array($result) || ($result["user_id"] ?? false) === null) {
+		return [
+			"success" => false,
+			"message" => "Invalid or expired session"
+		];
+	}
+
+	$uid = $result["user_id"];
+
+	$connection = getConnection();
+	// check if the event even exists in the database
+	try {
+		$stmt = $connection->prepare(
+		"INSERT into HangoutVotes (HangoutSuggestionID, UserID)
+			VALUES (?, ?)"
+	);
+	$stmt->bind_param("ii", $HangoutSuggestionID, $uid);
+	//execute the query
+	$stmt->execute();
+	// close the query
+	$stmt->close();
+// checking if the database had no reults for casting the vote
+
+	return[
+		"success" => true,
+		"message" => "You Voted!!"
+	];
+	} catch (\Throwable $e) {
+		//throw error something else goes wrong
+		error_log("Voting casting error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Failed to cast a vote"
+		];
+	}
+
+
+}
+
+function doGetEvents(){
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+			FROM Events
+			WHERE EventDate >= CURDATE()
+			ORDER BY EventDate ASC
+			LIMIT 50"
+		);
+
+		$stmt->execute();
+		$result = $stmt->get_result();
+
+		$events = [];
+
+		while ($event = $result->fetch_assoc()){
+			$events[] = $events;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"events" => $events
+		];
+	} catch (Throwable $e){
+		error_log("Get events error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doSendFriendRequest($sessionToken, $friendUsername){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+
+	$senderID = (int) $validation["user_id"];
+	$friendUsername = trim((string) $friendUsername);
+
+	if ($friendUsername === ""){
+		return [
+			"success" => false,
+			"message" => "Friend's username is required"
+		];
+	}
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT uid
+			FROM users
+			WHERE username = ?
+			LIMIT 1"
+		);
+
+		$stmt->bind_param("s", $friendUsername);
+		$stmt->execute();
+
+		$result = $stmt->get_result();
+		$friend = $result->fetch_assoc();
+
+		$stmt->close();
+
+		if (!$friend){
+			return [
+				"success" => false,
+				"message" => "User not found"
+			];
+		}
+
+		$receiverID = (int) $friend["uid"];
+
+		if ($senderID === $receiverID){
+			return [
+				"success" => false,
+				"message" => "You can't friend yourself"
+			];
+		}
+
+		//checking for existing friendships and requests
+		$stmt = $connection->prepare(
+			"SELECT Status
+			FROM Friends
+			WHERE
+				(SenderID = ? AND ReceiverID = ?)
+				OR
+				(SenderID = ? AND Receiver ID = ?)
+			LIMIT 1"
+		);
+
+		$stmt->bind_param(
+			"iiii",
+			$senderID,
+			$receiverID,
+			$receiverID,
+			$senderID
+		);
+
+		$stmt->execute();
+
+		$result = $stmt->get_result();
+		$existing = $result->fetch_assoc();
+
+		$stmt->close();
+
+		//this next portion will prevent duplicate friend requests
+
+		if ($existing){
+			if ($existing["Status"] === "accepted"){
+				return [
+					"success" => false,
+					"message" => "You are already friends"
+				];
+			}
+
+			if ($xisting["Status"] === "pending"){
+				return [
+					"success" => false,
+					"message" => "A friend request is already pending"
+				];
+			}
+
+			//ik same thing below but its for a declined request
+			return [
+				"success" => false,
+				"message" => "A friend request is already pending"
+			];
+		}
+
+		//insert the new friend request
+		$stmt = $connection->prepare(
+			"INSERT INTO Friends
+				(SenderID, ReceiverID, Status)
+			VALUES (?, ?, 'pending')"
+		);
+
+		$stmt->bind_param(
+			"ii",
+			$senderID,
+			$receiverID
+		);
+
+		$stmt->execute();
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"message" => "Friend request sent successfully"
+		];
+	} catch (Throwable $e){
+		error_log("Friend request error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to send friend request"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doGetFriendRequests($sessionToken){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+	//get logged in user id
+	$userID = (int) $validation["user_id"];
+
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT
+				f.FriendID,
+				f.SenderID,
+				u.username,
+				f.CreatedAt
+			FROM Friends f
+			JOIN users u ON f.SenderID = u.uid
+			WHERE f.ReceiverID = ?
+				AND f.Status = 'pending'
+			ORDER BY f.CreatedAt DESC"
+		);
+
+		$stmt->bind_param("i", $userID);
+		$stmt->execute();
+
+		$result = $stmt->get_result();
+
+		$requests = [];
+
+		while ($row = $result->fetch_assoc()){
+			$request[] = $row;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"message" => "Friend request retrieved",
+			"requests" => $requests
+		];
+	} catch (Throwable $e){
+		error_log("Get friend requests error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve friend requests"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doRespondFriendRequest($sessionToken, $friendID, $action){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+
+	$userID = (int) $validation["user_id"];
+
+	$friendID = filter_var($friendID, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
+
+	$action = strtolower(trim((string) $action));
+
+	if ($friendID === false){
+		return [
+			"success" => false,
+			"message" => "Invalid friend request ID"
+		];
+	}
+
+	if ($action !== "accept" && $action !== "decline"){
+		return [
+			"success" => false,
+			"message" => "Action must be accept or decline"
+		];
+	}
+
+	$connection = getConnection();
+
+	try{
+		//determining the friendship status
+		$newStatus = $action === "accept"
+			? "accepted"
+			: "declined";
+
+		$stmt = $connection->prepare(
+			"UPDATE Friends
+			SET Status = ?
+			WHERE FriendID = ?
+			AND Receiver ID = ?
+			AND Status = 'pending'"
+		);
+
+		$stmt->bind_param(
+			"sii",
+			$newStatus,
+			$friendID,
+			$userID
+		);
+
+		$stmt-execute();
+
+		$updated = $stmt->affected_rows;
+
+		$stmt->close();
+
+		//check whether a request was updated
+		if ($updated === 0){
+			return [
+				"success" => false,
+				"message" => "Pending friend request not found"
+			];
+		}
+
+		return [
+			"success" => true,
+			"message" => $action === "accept"
+				? "Friend request accepted"
+				: "Friend request declined"
+		];
+	} catch (Throwable $e){
+		error_log("Respond friend request error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to respond to friend request"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doGetFriends($sessionToken){
+	$validation = doValidate($sessionToken);
+
+	if (!is_array($validation) || ($validation["successs"] ?? false) !== true){
+		return [
+			"success" => false,
+			"message" => "Invalid session"
+		];
+	}
+
+	$userID = (int) $validation["user_id"];
+
+	$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT
+				u.uid,
+				u.username,
+				f.FriendID
+			FROM Friends f
+			JOIN users u
+				ON u.uid = CASE
+					WHEN f.SenderID = ? THEN f.ReceiverID
+					ELSE f.SenderID
+				END
+			WHERE
+				(f.SenderID = ? OR f.ReceiverID = ?)
+				AND f.Status = 'accepted'
+			ORDER BY u.username ASC"
+		);
+
+		$stmt->bind_param(
+			"iii",
+			$userID,
+			$userID,
+			$userID
+		);
+
+		$stmt->execute();
+
+		$result = $stmt->get_results();
+
+		$friends = [];
+
+		while ($row = $result->fetch_assoc()){
+			$friends[] = $row;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"message" => "Friends retrieve succcessfully",
+			"friends" => $friends
+		];
+	} catch (Throwable $e){
+		error_log("Get friends error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve friends"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+
 function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
@@ -705,6 +1176,21 @@ function requestProcessor($request){
 			case "create_hangout":
 				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
 				$request["invitee_usernames"] ?? []);
+			case "doSuggestEvent":
+				return doSuggestEvent($request["session_token"] ?? "", $request["hangout_id"] ?? "",
+				$request["event_id"] ?? "");
+			case "doVote":
+				return doVote($request["session_token"] ?? "", $request["suggestion_id"] ?? "");
+			case "get_events":
+				return doGetEvents();
+			case "send_friend_request":
+				return doSendFriendRequest($request["session_token"] ?? "", $request["friend_username"] ?? "");
+			case "get_friend_requests":
+				return doGetFriendRequests($request["session_token"] ?? "");
+			case "respond_friend_request":
+				return doRespondFriendRequest($request["session_token"] ?? "", $request["friend_id"] ?? 0, $request["action"] ?? "");
+			case "get_friends":
+				return doGetFriends($request["session_token"] ?? "");
 			default:
 				return [
 					"success" => false,
