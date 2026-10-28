@@ -25,9 +25,8 @@ curl --fail --silent --show-error \
 	--get \
 	"https://app.ticketmaster.com/discovery/v2/events.json" \
 	--data-urlencode "apikey=$TM_API_KEY" \
-	--data-urlencode "city=New York" \
 	--data-urlencode "countryCode=US" \
-	--data-urlencode "size=20" \
+	--data-urlencode "size=100" \
 	--output "$TEMP_FILE"
 
 #now checking if our response contains an event array
