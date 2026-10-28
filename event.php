@@ -5,10 +5,9 @@
 <title>Event Details</title>
 </head>
 <body>
-// Everything visible is inside this div. "hidden" keeps it invisible
-    // until JavaScript confirms the user is logged in
+
 <div id="content" hidden>
-// Navigation links back to the search page, home, and logout
+
     <p><a href="events.php">&larr; Back to events</a> | <a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
 
     <p id="status">Loading...</p>
@@ -23,11 +22,13 @@
            //  rel="noopener noreferrer" stops the Ticketmaster page from
             // controlling or seeing our page. Hidden unless the URL is valid
         <p><a id="ticketLink" target="_blank" rel="noopener noreferrer" hidden>Buy tickets on Ticketmaster</a></p>
-    </div>
+      // Added the save button and its connected by Javascript
+        <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>   
+ </div>
 </div>
 
+<script src="saveEvents.js"></script>
 <script>
-// Helper function: sends data to a PHP file as JSON and returns its JSON reply.
 // "async" means it can wait for the network without freezing the page.
 async function postJSON(url, body) {
     // fetch() sends an HTTP request to the given URL
@@ -41,7 +42,7 @@ async function postJSON(url, body) {
 }
 
 // Checks if the user is logged in before showing anything.
-// Returns true if the session is valid, otherwise redirects to login.
+// Returns true if the session is valid, if not it redirects to login.
 async function checkSession() {
     // The login page saved the token in the browser's sessionStorage
     const token = sessionStorage.getItem('session_token');
@@ -65,10 +66,14 @@ async function checkSession() {
     }
 }
 
+ // Connect the Save button to this event's ID
+ const saveBtn = document.getElementById('saveBtn');
+   saveBtn.addEventListener('click', () =>
+  saveEvent(eventId, saveBtn, document.getElementById('saveMsg')));
 // Loads one event's details and puts them on the page
 async function loadEvent() {
     const status = document.getElementById('status');
-    // Read the "id" from the page address, e.g. event.php?id=Z7r9jZ1AdFKdo
+    // Read the "id" from the page address liek for example event.php?id=whatver123445
     // "|| ''" uses an empty string if there's no id in the address
     const eventId = new URLSearchParams(window.location.search).get('id') || "";
 

@@ -27,6 +27,7 @@
     <ul id="results"></ul>
 </div>
 
+<script src="saveEvent.js"></scripts>
 <script>
 async function postJSON(url, body) {
     const response = await fetch(url, {
@@ -80,6 +81,17 @@ async function searchEvents() {
             li.appendChild(document.createTextNode(
                 " — " + (ev.date || "Date TBA") + ", " + (ev.venue || "") + (ev.city ? ", " + ev.city : "")
             ));
+// Save button for this event. Ties in with  Nick's recommendation system
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = "Save Event";
+// Small area next to the button for error messages
+            const saveMsg = document.createElement('span');
+// When clicked, save specific event
+            saveBtn.addEventListener('click', () => saveEvent(ev.event_id, saveBtn, saveMsg));
+            li.appendChild(document.createTextNode(" "));   // space before the button
+            li.appendChild(saveBtn);
+            li.appendChild(saveMsg);
+
             list.appendChild(li);
         }
     } catch (e) {
