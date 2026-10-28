@@ -58,22 +58,63 @@
         return false;
     }
 
+    // This function loads the events into the dropdown
     async function loadEvents() {
-    const response = await fetch("get_events_handler.php");
-    const data = await response.json();
 
-    if (data.success) {
-        data.events.forEach(event => {
-            console.log(event.EventName);
-            console.log(event.EventDate);
-            console.log(event.Venue);
-            console.log(event.City);
-            console.log(event.TicketURL);
-        });
+        // get the select element
+        const eventSelect = document.getElementById("event_id");
+
+        // get the message paragraph to display messages to the user
+        const messagebox = document.getElementById("message");
+
+        try {
+            // fetch the events from the handler
+            const response = await fetch("get_events_handler.php");
+
+            // waits for the server reply
+            const data = await response.json();
+
+            // check if the request was successful
+            if (!data.success) {
+                messagebox.textContent = data.message || "Failed to load events";
+                return;
+            }
+
+            // check if there are no events
+            if (!data.events || data.events.length == 0) {
+                messagebox.textContent = "No upcoming events are available";
+                return;
+            }
+
+            // loop through the events and add them to the dropdown
+            data.events.forEach(event => {
+
+                // create an option for the event
+                const option = document.createElement("option");
+
+                // set the event id as the option value
+                option.value = event.EventID;
+
+                // display the event name and date
+                option.textContent = event.EventName + " - " + event.EventDate;
+
+                // add the option to the dropdown
+                eventSelect.appendChild(option);
+
+            });
+
+        } catch (error) {
+            // display an error message to the user
+            messagebox.textContent = "Failed to load events. Please try again";
+            console.error(error);
+        }
     }
-}
 
-loadEvents();
+    // load events when the page loads
+    document.addEventListener("DOMContentLoaded", loadEvents);
+
+	
+
 
     // This function sends the input to the hanngout handler and receives a response
     async function sendHangout(session_token, eventID, usernames) {
