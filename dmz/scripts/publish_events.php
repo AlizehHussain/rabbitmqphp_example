@@ -63,9 +63,10 @@ foreach (array_chunk($events, 5) as $batch){
 		"type" => "sync_events",
 		"events" => $batch
 	];
-
+	echo "Sending to rabbitmq" . PHP_EOL;
 	$response = $client->send_request($request);
-
+	echo "Response received" . PHP_EOL;
+	var_dump($response);
 	if (!is_array($response) || ($response["success"] ?? false) !== true){
 		//prints error to standard error
 		fwrite(STDERR, "Event batch synchronization failed\n");

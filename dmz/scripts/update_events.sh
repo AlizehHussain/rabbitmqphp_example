@@ -20,16 +20,16 @@ TEMP_FILE=$(mktemp "$OUTPUT_DIR/events.XXXXXX")
 trap 'rm -f "$TEMP_FILE"' EXIT #trap basically registers a command to execute when the script exits, doesnt matter if it succeeds or fails
 
 #now sending an http request to ticketmaster, curl is the best way to retrieve API data from a bash script. otherwise id need a separate programming library
-curl --fail --silent --show-error \ #treats http response as failures, hides unnecessary progress, and still displays the error
+curl --fail --silent --show-error \
 	--retry 3 \
 	--max-time 30 \
 	--get \
 	"https://app.ticketmaster.com/discovery/v2/events.json" \
-	--data-urlencode "apikey=$TM_API_KEY" \ #safely encodes my API parameters
+	--data-urlencode "apikey=$TM_API_KEY" \
 	--data-urlencode "city=New York" \
 	--data-urlencode "countryCode=US" \
-	--data-urlencode "size=20" \
-	--output "$TEMP_FILE" #there is where my output is saved
+	--data-urlencode "size=100" \
+	--output "$TEMP_FILE"
 
 #jq is a command-line tool for processing JSON, i access ticketmaster's event data, verify its structure as an array
 #put it in dev/null bc idc about the output, i just want to know if it succeeds
