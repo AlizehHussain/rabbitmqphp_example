@@ -20,7 +20,7 @@ async function saveEvent(eventId, button, msg) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 session_token: sessionStorage.getItem('session_token'),
-                event_id: eventId
+                event_id: String(eventId)
             })
         });
 

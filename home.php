@@ -33,8 +33,10 @@ async function validateSession() {
 validateSession();
 </script>
 </head>
-
+ <p><a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
 <body>
 <h1>Welcome!<h1>
-<a href="logout.php">Log Out</a>
+<div>
+<a href="events.php">See upcoming events!</a>
+</div>
 </body>

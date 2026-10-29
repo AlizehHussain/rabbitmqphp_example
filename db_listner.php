@@ -407,19 +407,19 @@ function doGetRec($sessionToken){
 			"SELECT e.Category, e.City
 			FROM UserPicks p
 			JOIN Events e ON p.EventID = e.EventID
-			WHERE p.USERID = ?"
+			WHERE p.UserID = ?"
 		);
 
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$results = $stmt->get_results();
+		$result = $stmt->get_result();
 
 		$categoryCounts = [];
 		$cityCounts = [];
 		$pickedCount = 0;
 
-		while ($pick = $result-fetch_assoc()){
+		while ($pick = $result->fetch_assoc()){
 			$pickedCount++;
 
 			$category = strtolower(trim($pick["Category"] ?? ""));
@@ -436,7 +436,7 @@ function doGetRec($sessionToken){
 		$stmt->close();
 
 		$stmt = $connection->prepare(
-			"SELECT e.EventID, e.EventName, e.Venue, e.City, e.Category, e.TicketURL
+			"SELECT e.EventID, e.EventDate, e.EventName, e.Venue, e.City, e.Category, e.TicketURL
 			FROM Events e
 			WHERE e.EventDate >= CURDATE()
 				AND NOT EXISTS (
@@ -452,9 +452,9 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_results();
+		$result = $stmt->get_result();
 
-		$rec = [];
+		$recommendations = [];
 
 		while ($event = $result->fetch_assoc()){
 			$category = strtolower(trim($event["Category"] ?? ""));
@@ -474,7 +474,7 @@ function doGetRec($sessionToken){
 			//If theres a new user, show upcoming events, otherwise include matching events
 			if ($pickedCount === 0 || $score > 0){
 				$event["score"] = $score;
-				$rec[] = $event;
+				$recommendations[] = $event;
 			}
 		}
 
