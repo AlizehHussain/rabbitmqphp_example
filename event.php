@@ -83,8 +83,6 @@
 
 <script>
 
-const eventId = new URLSearchParams(window.location.search).get('id');
-
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -131,7 +129,8 @@ async function loadEvent() {
     const status = document.getElementById('status');
 
 // Read the event ID from the address, e.g. event.php?id=whatevrabsbshaua
-    
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get('id');
 // No ID in the address means there's nothing to show.
 // (The server checks the ID's format, so we only check that one exists.)
     if (!eventId) {
@@ -167,10 +166,7 @@ async function loadEvent() {
         document.getElementById('city').textContent = ev.city || "TBA";
         document.getElementById('category').textContent = ev.category || "Other";
 
-	const avg = document.getElementById('globalAvg');
-	avg.textContent = ev.rating_count > 0
-		? "Global avg: " + ev.avg_rating + " / 5 (" + ev.rating_count + "ratings)"
-	       : "Global avg: no ratings yet";	
+	
 
 
         // Only show the ticket link if it's a normal https web address
@@ -181,10 +177,10 @@ async function loadEvent() {
         }
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
-        const saveBtn = document.getElementById('saveBtn');
-        saveBtn.onclick = function () {
-            saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
-        };
+	const saveBtn = document.getElementById('saveBtn');i
+	saveBtn.addEventListener('click', function () {
+                   saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
+        });
 
         // Hide "Loading..." and show the details
         status.hidden = true;
@@ -203,18 +199,6 @@ async function startPage() {
     }
 }
 
-
-document.querySelectorAll('.rating input').forEach(function (radio){
-	radio.addEventListener('change', async function () {
-		await sendRequest("eventsHandler.php", {
-			typeRequest: 'rate_event',
-			session_token: sessionStorage.getItem('session_token'),
-			event_id: eventId,
-			rating: radio.value
-	});
-	loadEvent();
-	});
-});
 
 startPage();
 </script>
