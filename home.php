@@ -123,9 +123,9 @@ async function searchEvents() {
 // filter() keeps only the events where this function returns true.
 // An empty box is skipped, so it doesn't filter anything out.
         const events = data.events.filter(function (ev) {
-            const name = (ev.name || "").toLowerCase();
-            const venue = (ev.venue || "").toLowerCase();
-            const evCity = (ev.city || "").toLowerCase();
+            const name = (ev.EventName || "").toLowerCase();
+            const venue = (ev.Venue || "").toLowerCase();
+            const evCity = (ev.City || "").toLowerCase();
 
             // keyword can be in the event name OR the venue
             if (keyword !== "" && !name.includes(keyword) && !venue.includes(keyword)) {
@@ -136,7 +136,7 @@ async function searchEvents() {
                 return false;
             }
             // category has to match exactly, since it comes from the dropdown
-            if (category !== "" && ev.category !== category) {
+            if (category !== "" && ev.Category !== category) {
                 return false;
             }
             return true;
@@ -157,16 +157,16 @@ async function searchEvents() {
 // Event name as a link to its detail page.
 // encodeURIComponent makes the ID safe to put in a web address.
             const link = document.createElement('a');
-            link.href = "event.php?id=" + encodeURIComponent(ev.event_id);
+            link.href = "event.php?id=" + encodeURIComponent(ev.EventID);
 // textContent shows the name as plain text, so if a name ever
 // contained HTML or a script, it would display instead of running
-            link.textContent = ev.name;
+            link.textContent = ev.EventName;
             li.appendChild(link);
 
 // Date, venue, and city after the name ("Date TBA" if there's no date)
-            let details = " — " + (ev.date || "Date TBA") + ", " + (ev.venue || "");
-            if (ev.city) {
-                details = details + ", " + ev.city;
+            let details = " — " + (ev.EventDate || "Date TBA") + ", " + (ev.Venue || "");
+            if (ev.City) {
+                details = details + ", " + ev.City;
             }
             li.appendChild(document.createTextNode(details + " "));
 
@@ -175,7 +175,7 @@ async function searchEvents() {
             saveBtn.textContent = "Save Event";
             const saveMsg = document.createElement('span'); // shows errors next to the button
             saveBtn.addEventListener('click', function () {
-                saveEvent(ev.event_id, saveBtn, saveMsg); // from saveEvent.js
+                saveEvent(ev.EventID, saveBtn, saveMsg); // from saveEvent.js
             });
             li.appendChild(saveBtn);
             li.appendChild(saveMsg);
