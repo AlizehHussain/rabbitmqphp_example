@@ -352,7 +352,38 @@ function doSearchEvents($keyword, $city, $category){
 		$connection->close();
 	}
 }
+function doRateEvent($sessionToken, $eventID, $rating){
 
+	$validation = doValidate($sessionToken);
+	if (($validation["success"] ?? false) !== true){
+		return ["success" => false, "message" => "invalid or expired session"];
+	}
+
+	$userID = (int) $validation["user_id"];
+	$eventID = (int) $eventID;
+	$rating = (int) $rating;
+
+	if ($eventID <= 0 || $rating < 1 || $rating > 5){
+		return ["success" => false, "message" => "invalid rating"];
+	}
+
+	$connection = getConnection();
+	try {
+		$stmt = $connection->prepare( 
+			"INSERT INTO EventRatings (UserID, EventID, Rating)
+			VALUES(?,?,?)
+			ON DUPLICATE KEY UPDATE Rating =VALUES(Rating)"
+		);
+	$stmt->bind_param("iii", $userID, $eventID, $rating);
+	$stmt->execute();
+	$stmt->close();
+	} catch (Throwable $e){
+		error_log("Rate event error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to save rating"];
+	} finally {
+		$connection->close();
+	}
+}
 function doGetEvent($eventId){
 	//same check as the web handler, done again here in case someone bypasses it
 	if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $eventId)){
@@ -371,13 +402,28 @@ function doGetEvent($eventId){
 		$row = $stmt->get_result()->fetch_assoc();
 		$stmt->close();
 
+		//below if for the star rating for each event on event.php
+		$stmt = $connection->prepare(
+			"SELECT ROUND(AVG(Rating), 1) AS avg_rating, COUNT(*) AS rating_count, COUNT(*) AS rating_count
+			FROM EventRatings WHERE EventID = ?"
+		);
+		$stmt->bind_param("s", $eventId);
+		$stmt->execute();
+		$stats = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+
+		$event = formatEvent($row);
+		$event["avg_rating"] = $stats["avg_rating"]; //null if no one has voted
+		$event["rating"] = (int) $stats["rating_count"];
+		//ends here for star rating code
+
 		if (!$row){
 			return ["success" => false, "message" => "Event not found"];
 		}
 
 		return [
 			"success" => true,
-			"event"   => formatEvent($row)
+			"event"   => $event
 		];
 	} catch (Throwable $e){
 		error_log("Get event error: " . $e->getMessage());
@@ -794,6 +840,12 @@ function requestProcessor($request){
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
+			case "rate_event":
+				return doRateEvent(
+					$request["session_token"] ?? "",
+					$request["event_id"] ?? 0,
+					$request["rating"] ?? 0
+				);
 			case "create_hangout":
 				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
 				$request["invitee_usernames"] ?? []);

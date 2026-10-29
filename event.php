@@ -3,6 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <title>Event Details</title>
+<style>
+.rating {
+  margin-top: 0px;
+  border: none;
+  display: inline-block;
+}
+
+.rating > label {
+  color: #90A0A3;
+  float: right;
+}
+
+.rating > label:before {
+  margin: 5px;
+  font-size: 2em;
+  content: "\2605"; /* ★ */
+  display: inline-block;
+}
+
+.rating > input {
+  display: none;
+}
+
+.rating > input:checked ~ label,
+.rating:not(:checked) > label:hover,
+.rating:not(:checked) > label:hover ~ label {
+  color: #F79426;
+}
+
+.rating > input:checked + label:hover,
+.rating > input:checked ~ label:hover,
+.rating > label:hover ~ input:checked ~ label,
+.rating > input:checked ~ label:hover ~ label {
+  color: #FECE31;
+}
+</style>
 </head>
 <body>
 
@@ -16,7 +52,20 @@
  <!-- The event details, hidden until the data arrives.
          Each empty span gets filled in by JavaScript using its id -->
     <div id="details" hidden>
-        <h1 id="name"></h1>
+	<h1 id="name"></h1>
+<div class="rating">
+  <input type="radio" id="star5" name="rating" value="5" />
+  <label class="star" for="star5" title="Awesome" aria-hidden="true"></label>
+  <input type="radio" id="star4" name="rating" value="4" />
+  <label class="star" for="star4" title="Great" aria-hidden="true"></label>
+  <input type="radio" id="star3" name="rating" value="3" />
+  <label class="star" for="star3" title="Very good" aria-hidden="true"></label>
+  <input type="radio" id="star2" name="rating" value="2" />
+  <label class="star" for="star2" title="Good" aria-hidden="true"></label>
+  <input type="radio" id="star1" name="rating" value="1" />
+  <label class="star" for="star1" title="Bad" aria-hidden="true"></label>
+</div>
+<span id="globalAvg">Global avg: ...</span>
         <p><strong>Date:</strong> <span id="date"></span></p>
         <p><strong>Venue:</strong> <span id="venue"></span></p>
         <p><strong>City:</strong> <span id="city"></span></p>
@@ -26,13 +75,16 @@
  <!-- The Save button, with a spot next to it for error messages -->
 
         <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
-    </div>
+</div>
 </div>
 
 <!-- Loads the shared Save button code we made -->
 <script src="saveEvent.js"></script>
 
 <script>
+
+const eventId = new URLSearchParams(window.location.search).get('id');
+
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -79,9 +131,7 @@ async function loadEvent() {
     const status = document.getElementById('status');
 
 // Read the event ID from the address, e.g. event.php?id=whatevrabsbshaua
-    const params = new URLSearchParams(window.location.search);
-    const eventId = params.get('id');
-
+    
 // No ID in the address means there's nothing to show.
 // (The server checks the ID's format, so we only check that one exists.)
     if (!eventId) {
@@ -117,6 +167,12 @@ async function loadEvent() {
         document.getElementById('city').textContent = ev.city || "TBA";
         document.getElementById('category').textContent = ev.category || "Other";
 
+	const avg = document.getElementById('globalAvg');
+	avg.textContent = ev.rating_count > 0
+		? "Global avg: " + ev.avg_rating + " / 5 (" + ev.rating_count + "ratings)"
+	       : "Global avg: no ratings yet";	
+
+
         // Only show the ticket link if it's a normal https web address
         if (ev.url && ev.url.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
@@ -126,9 +182,9 @@ async function loadEvent() {
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
         const saveBtn = document.getElementById('saveBtn');
-        saveBtn.addEventListener('click', function () {
+        saveBtn.onclick = function () {
             saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
-        });
+        };
 
         // Hide "Loading..." and show the details
         status.hidden = true;
@@ -146,6 +202,19 @@ async function startPage() {
         loadEvent();
     }
 }
+
+
+document.querySelectorAll('.rating input').forEach(function (radio){
+	radio.addEventListener('change', async function () {
+		await sendRequest("eventsHandler.php", {
+			typeRequest: 'rate_event',
+			session_token: sessionStorage.getItem('session_token'),
+			event_id: eventId,
+			rating: radio.value
+	});
+	loadEvent();
+	});
+});
 
 startPage();
 </script>

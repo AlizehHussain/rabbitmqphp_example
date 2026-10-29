@@ -15,7 +15,7 @@ $data  = json_decode(file_get_contents("php://input"), true) ?? [];
 $type  = $data['typeRequest'] ?? "";
 $token = $data['session_token'] ?? "";
 
-if ($type !== "search_events" && $type !== "get_event") {
+if ($type !== "search_events" && $type !== "get_event" && $type !== "rate_event") {
     sendReply(["success" => false, "message" => "Invalid request"]);
 }
 
@@ -31,6 +31,14 @@ if ($type === "search_events") {
         "city"          => substr(trim($data['city'] ?? ""), 0, 100),
         "category"      => substr(trim($data['category'] ?? ""), 0, 50)
     ];
+} elseif ($type === "rate_event"){
+	$request = [
+		"type" => "rate_event",
+		"session_token" => $token,
+		"event_id"	=> (int) ($data['event_id'] ?? 0),
+		"rating"	=> (int) ($data['rating'] ?? 0)
+
+	];
 } else {
     $eventId = trim($data['event_id'] ?? "");
     if ($eventId === "" || strlen($eventId) > 64) {
@@ -58,4 +66,9 @@ if (!is_array($response) || empty($response["success"])) {
 if ($type === "search_events") {
     sendReply(["success" => true, "events" => $response["events"] ?? []]);
 }
+
+if ($type === "rate_event"){
+	sendReply(["success" => true, "message" => "Rating saved"]);
+}
+
 sendReply(["success" => true, "event" => $response["event"] ?? null]);
