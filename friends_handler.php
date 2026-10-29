@@ -37,7 +37,7 @@ $sessionToken = $data["session_token"] ?? "";
 //im only going to allow these 4 functions i made on db_listener
 $allowedTypes = [
 	"send_friend_request",
-	"get_friend_request",
+	"get_friend_requests",
 	"respond_friend_request",
 	"get_friends"
 ];

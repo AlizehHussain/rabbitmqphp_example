@@ -1,11 +1,11 @@
-<?
+<?php
 header("Content-Type: application/json");
 
 require_once __DIR__ . "/path.inc";
 require_once __DIR__ . "/get_host_info.inc";
 require_once __DIR__ . "/rabbitMQLib.inc";
 
-if ($_SERVER["REQUEST_METHOD] !== "GET"){
+if ($_SERVER["REQUEST_METHOD"] !== "GET"){
 	http_response_code(405);
 
 	echo json_encode([
@@ -25,6 +25,8 @@ try{
 	$request = [
 		"type" => "get_events"
 	];
+
+	$response = $client->send_request($request);
 
 	if (!is_array($response)){
 		http_response_code(502);
