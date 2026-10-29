@@ -5,17 +5,20 @@
 <title>Browse Events</title>
 </head>
 <body>
-// Eveything on this page is inside this deiv so it starts hidden and lonly 
-// shows once we've checked that the user is logged in
+
+<!-- Everything on this page is inside this div, so it starts hidden and only
+shows once we've checked that the user is logged in -->
 <div id="content" hidden>
     <p><a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
     <h1>Browse Events</h1>
-// This is the search form section here. So every box is optional so leaving them all
-// empty automatically shows all evnst by default
-    <form id="searchForm">
+
+<!-- The search form. Every box is optional, so leaving them all
+empty shows all events by default -->
+ <form id="searchForm">
         <input type="text" id="keyword" placeholder="Artist, event, or venue">
         <input type="text" id="city" placeholder="City">
-// These category names match what Ticketmaster uses, which is what Nick's script saves in the database
+
+<!-- These category names match what Ticketmaster uses, which is what Nick's script saves in the database -->
         <select id="category">
             <option value="">All categories</option>
             <option value="Music">Music</option>
@@ -27,13 +30,14 @@
         <button type="submit">Search</button>
     </form>
 
-// Shows messages like "Searching..." or "3 event(s) found" for example
+<!-- Shows messages like "Searching..." or "3 event(s) found" -->
     <p id="status"></p>
-// The search results get added into this list by JavaScript
-    <ul id="results"></ul>
+
+<!-- The search results get added into this list by JavaScript -->
+ <ul id="results"></ul>
 </div>
 
-// This line just loads the shared Save button code
+<!-- This line just loads the shared Save button code -->
 <script src="saveEvent.js"></script>
 
 <script>
