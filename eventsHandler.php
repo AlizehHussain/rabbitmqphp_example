@@ -82,6 +82,10 @@ $response = $client->send_request($request);
 if (empty($response["success"])) {
     sendReply(["success" => false, "message" => $response["message"] ?? "Request failed"]);
 }
+// Close the first connection before opening a new one. All clients share one
+// reply queue, so if this one stayed open it could grab the search reply
+// meant for the second client, and the page would wait forever.
+unset($client);
 
 // If tt worked send back the list of events, or the single event
 if ($type === "search_events") {
