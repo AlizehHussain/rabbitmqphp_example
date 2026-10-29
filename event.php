@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Event Details</title>
+</head>
+<body>
+
+//  Everything is inside this div and is hidden until we make sure the user is logged out
+<div id="content" hidden>
+    <p><a href="events.php">Back to events</a> | <a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
+
+// This shows "Loading..." or an error message if we get an error
+    <p id="status">Loading...</p>
+
+//  This is pretty much the event details and is hidden until the data arrives.
+// Each empty span gets filled in by JavaScript using its id
+    <div id="details" hidden>
+        <h1 id="name"></h1>
+        <p><strong>Date:</strong> <span id="date"></span></p>
+        <p><strong>Venue:</strong> <span id="venue"></span></p>
+        <p><strong>City:</strong> <span id="city"></span></p>
+        <p><strong>Category:</strong> <span id="category"></span></p>
+// Ticket link is only shown if the event has a valid web address
+        <p><a id="ticketLink" hidden>Buy tickets on Ticketmaster</a></p>
+// This is the save button and a section for error messages next to it
+        <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
+    </div>
+</div>
+
+// This loads the shared Save button code we made
+<script src="saveEvent.js"></script>
+
+<script>
+// Sends data to one of our PHP files and returns the PHP file's answer
+async function sendRequest(url, data) {
+    const response = await fetch(url, {
+        method: "POST", // send data to the server
+        headers: { "Content-Type": "application/json" }, // tell PHP we're sending JSON
+        body: JSON.stringify(data) // turn our data into JSON text
+    });
+    return response.json(); // turn PHP's JSON answer back into an object
+}
+
+// Checks that the user is logged in. Returns true if they are, if they're not sends them to the login page.
+async function checkLogin() {
+    const token = sessionStorage.getItem('session_token');
+
+ // No token means they never logged in
+    if (!token) {
+        window.location.href = "login.php";
+        return false;
+    }
+
+    try {
+// Asks the server if the token is still valid
+        const data = await sendRequest("sessionValidator.php", {
+            typeRequest: 'validate_session',
+            session_token: token
+        });
+
+        if (data.success) {
+            return true;
+        }
+
+// If the token expired or isn't real it removes it and goes to login
+        sessionStorage.removeItem('session_token');
+        window.location.href = "login.php";
+        return false;
+    } catch (e) {
+        window.location.href = "login.php";
+        return false;
+    }
+}
+
+// Loads one event's details and shows them on the page
+async function loadEvent() {
+    const status = document.getElementById('status');
+
+// Read the event ID from the address, e.g. event.php?id=whatevrabsbshaua
+    const params = new URLSearchParams(window.location.search);
+    const eventId = params.get('id');
+
+// No ID in the address means there's nothing to show.
+// (The server checks the ID's format, so we only check that one exists.)
+    if (!eventId) {
+        status.textContent = "Event not found.";
+        return;
+    }
+
+    try {
+// Ask eventsHandler.php for this event. It checks the login again,
+// then sends "get_event" through RabbitMQ to the database listener.
+        const data = await sendRequest("eventsHandler.php", {
+            typeRequest: 'get_event',
+            session_token: sessionStorage.getItem('session_token'),
+            event_id: eventId
+        });
+
+ // If the event doesn't exist, or something went wrong on the server
+        if (!data.success || !data.event) {
+            status.textContent = data.message || "Event not found.";
+            return;
+        }
+
+        const ev = data.event;
+
+        // Put the event name in the browser tab
+        document.title = ev.name;
+
+        // Fill in each field. textContent shows plain text only, so event data
+        // can't inject code into the page. "||" gives a fallback when a field is empty.
+        document.getElementById('name').textContent = ev.name;
+        document.getElementById('date').textContent = ev.date || "Date TBA";
+        document.getElementById('venue').textContent = ev.venue || "TBA";
+        document.getElementById('city').textContent = ev.city || "TBA";
+        document.getElementById('category').textContent = ev.category || "Other";
+
+        // Only show the ticket link if it's a normal https web address
+        if (ev.url && ev.url.startsWith("https://")) {
+            const link = document.getElementById('ticketLink');
+            link.href = ev.url;
+            link.hidden = false;
+        }
+
+        // Connect the Save button to this event (saveEvent is in saveEvent.js)
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.addEventListener('click', function () {
+            saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
+        });
+
+        // Hide "Loading..." and show the details
+        status.hidden = true;
+        document.getElementById('details').hidden = false;
+    } catch (e) {
+        status.textContent = "Could not reach the server.";
+    }
+}
+
+// Runs once when the page loads: check login, then show the page and load the event
+async function startPage() {
+    const loggedIn = await checkLogin();
+    if (loggedIn) {
+        document.getElementById('content').hidden = false;
+        loadEvent();
+    }
+}
+
+startPage();
+</script>
+</body>
+</html>
