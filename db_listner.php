@@ -633,19 +633,17 @@ function doSavePick($sessionToken, $eventID){
 	}
 }
 
-
-
 function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
 	//get the user session token
-	 $result = getUseridFromSession($sessionToken);
+	 $result = doValidate($sessionToken);
 	// check if the session is still valid by checking if user id exists
-	if ( $result["user_id"] === null) {
+	if (!is_array($result) || ($result["success"] ?? false) !== true){
+		//i do my message sending returns like this bc its easier to read and change just in case
 		return [
 			"success" => false,
-			"message" => "Invalid or expired session",
+			"message" => "Invalid or expired session"
 		];
-
 	}
 
 	$uid = $result["user_id"];
@@ -671,11 +669,12 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	$stmt->execute();
 	/// get the result of the query
 	$stmt_result = $stmt->get_result();
+	$row = $stmt_result->fetch_assoc();
 	// close the query
 	$stmt->close();
 // checking if the database had no reults for finding the event
 
-	if (!$row = $stmt_result->fetch_assoc()) {
+	if (!row) {
 		return [
 		// return event not found if it does not exist
 		"success" => false,
@@ -698,7 +697,7 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 		FROM users
 		WHERE username = ?"
 	);
-	
+	$username = "";
 	$stmt->bind_param("s", $username);
 	// add every user invited 
 	foreach ($inviteeUsernames as $username){
