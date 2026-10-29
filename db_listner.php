@@ -213,7 +213,7 @@ function doSyncEvents($events){
 	$connection = getConnection();
 
 	try {
-		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails
+		$connection->begin_transaction(); //starting a transaction so the entire batch succeeds or fails, if it fails i can undo it
 
 		$stmt = $connection->prepare(
 			"INSERT INTO Events (EventID, EventName, EventDate, Venue, City, Category, TicketURL)
@@ -305,6 +305,7 @@ function doGetRec($sessionToken){
 
 		$result = $stmt->get_result();
 
+		//these arrays track how frequently different categories and cities appear in the user's saved events
 		$categoryCounts = [];
 		$cityCounts = [];
 		$pickedCount = 0;
@@ -338,7 +339,7 @@ function doGetRec($sessionToken){
 			ORDER BY e.EventDate ASC
 			LIMIT 1000"
 		);
-
+		//NOT EXISTS to make sure it doesn't recommend an event a user already picked
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
@@ -347,6 +348,7 @@ function doGetRec($sessionToken){
 		$recommendations = [];
 
 		while ($event = $result->fetch_assoc()){
+			//fetch one event at a time as an associative array
 			$category = strtolower(trim($event["Category"] ?? ""));
 			$city = strtolower(trim($event["City"] ?? ""));
 
@@ -359,6 +361,12 @@ function doGetRec($sessionToken){
 				: 0;
 
 			//rule based scoring formula
+			//40 points foe each matching saved category
+			//20 points for each matching saved city
+			//EXAMPLE:
+			//Music event in New York Cat: 2 City: 2 Score: 120
+			//Music event in Brooklyn Cat: 2 City: 1 Score: 100
+			//Sports event in New York: Cat: 1 City: 2 Score: 80
 			$score = (40 * $categoryMatches) + (20 * $cityMatches);
 
 			//If theres a new user, show upcoming events, otherwise include matching events
@@ -371,6 +379,8 @@ function doGetRec($sessionToken){
 		$stmt->close();
 
 		//sort rec by score
+		//higher scoring events appear first
+		//if two events have the same score, the one with the earlier event date appears first
 		usort($recommendations, function ($x, $y){
 			if ($x["score"] !== $y["score"]){
 				return $y["score"] <=> $x["score"];
@@ -422,7 +432,7 @@ function doSavePick($sessionToken, $eventID){
 	$connection = getConnection();
 
 	try{
-		$stmt = $connection->prepare(
+		$stmt = $connection->prepare( //makes sure users cant save nonexistent events
 			"SELECT EventID
 			FROM Events
 			WHERE EventID = ?
@@ -445,6 +455,7 @@ function doSavePick($sessionToken, $eventID){
 		}
 
 		//Saving the event to the user's previous picks, the primary key should prevent duplicate slections
+		//INSERT IGNORE allows sql to skip certain insert errors too
 		$stmt = $connection->prepare(
 			"INSERT IGNORE INTO UserPicks
 				(UserID, EventID)
@@ -455,7 +466,7 @@ function doSavePick($sessionToken, $eventID){
 
 		$stmt->execute();
 
-		$added = $stmt->affected_rows > 0;
+		$added = $stmt->affected_rows > 0; //if sql inserted a new row, the value is true
 
 		$stmt->close();
 
