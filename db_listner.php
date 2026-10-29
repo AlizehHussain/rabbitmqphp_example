@@ -38,6 +38,10 @@ function doRegister($username, $email, $password){
 		WHERE username = ? or email = ?"
 	);
 
+	$stmt->bind_param("ss", $username, $email);
+	$stmt->execute();
+	$stmt->store_result();
+
 	if ($stmt->num_rows > 0){
 		$stmt->close();
 
@@ -653,7 +657,7 @@ function doGetEvents(){
 		$events = [];
 
 		while ($event = $result->fetch_assoc()){
-			$events[] = $events;
+			$events[] = $event;
 		}
 
 		$stmt->close();
@@ -693,6 +697,8 @@ function doSendFriendRequest($sessionToken, $friendUsername){
 			"message" => "Friend's username is required"
 		];
 	}
+
+	$connection = getConnection();
 
 	try{
 		$stmt = $connection->prepare(
@@ -844,7 +850,7 @@ function doGetFriendRequests($sessionToken){
 		$requests = [];
 
 		while ($row = $result->fetch_assoc()){
-			$request[] = $row;
+			$requests[] = $row;
 		}
 
 		$stmt->close();
@@ -919,7 +925,7 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 			$userID
 		);
 
-		$stmt-execute();
+		$stmt->execute();
 
 		$updated = $stmt->affected_rows;
 
@@ -954,7 +960,7 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 function doGetFriends($sessionToken){
 	$validation = doValidate($sessionToken);
 
-	if (!is_array($validation) || ($validation["successs"] ?? false) !== true){
+	if (!is_array($validation) || ($validation["success"] ?? false) !== true){
 		return [
 			"success" => false,
 			"message" => "Invalid session"
@@ -992,7 +998,7 @@ function doGetFriends($sessionToken){
 
 		$stmt->execute();
 
-		$result = $stmt->get_results();
+		$result = $stmt->get_result();
 
 		$friends = [];
 
