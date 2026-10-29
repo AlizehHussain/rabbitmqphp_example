@@ -6,29 +6,30 @@
 </head>
 <body>
 
-//  Everything is inside this div and is hidden until we make sure the user is logged out
+<!-- Everything is inside this div and stays hidden until we make sure the user is logged in -->
 <div id="content" hidden>
     <p><a href="events.php">Back to events</a> | <a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
 
-// This shows "Loading..." or an error message if we get an error
+ <!-- Shows "Loading..." or an error message if something goes wrong -->
     <p id="status">Loading...</p>
 
-//  This is pretty much the event details and is hidden until the data arrives.
-// Each empty span gets filled in by JavaScript using its id
+ <!-- The event details, hidden until the data arrives.
+         Each empty span gets filled in by JavaScript using its id -->
     <div id="details" hidden>
         <h1 id="name"></h1>
         <p><strong>Date:</strong> <span id="date"></span></p>
         <p><strong>Venue:</strong> <span id="venue"></span></p>
         <p><strong>City:</strong> <span id="city"></span></p>
         <p><strong>Category:</strong> <span id="category"></span></p>
-// Ticket link is only shown if the event has a valid web address
+ <!-- The ticket link is only shown if the event has a valid web address -->
         <p><a id="ticketLink" hidden>Buy tickets on Ticketmaster</a></p>
-// This is the save button and a section for error messages next to it
+ <!-- The Save button, with a spot next to it for error messages -->
+
         <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
     </div>
 </div>
 
-// This loads the shared Save button code we made
+<!-- Loads the shared Save button code we made -->
 <script src="saveEvent.js"></script>
 
 <script>
