@@ -3,7 +3,7 @@ chdir(__DIR__ . '/..');
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');
-
+require_once('get_events_handler.php');
 
 ?>
 <head>
@@ -31,6 +31,19 @@ async function validateSession() {
 	}
 }
 validateSession();
+
+async function loadEvents(){
+	const response = await fetch("get_events_handler.php");
+	const data = await response.json();
+	
+			console.log(data);
+	if (data.success){
+		for (const event of data.events){
+			console.log(event.EventName, event.City);
+		}
+	}
+}
+loadEvents();
 </script>
 </head>
 
