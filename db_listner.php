@@ -340,7 +340,7 @@ function doSearchEvents($keyword, $city, $category){
 
 		return [
 			"success" => true,
-			"events"  => $events
+			"events"  => formatEvent($row)
 		];
 	} catch (Throwable $e){
 		error_log("Event search error: " . $e->getMessage());
@@ -401,22 +401,7 @@ function doGetEvent($eventId){
 		$stmt->execute();
 		$row = $stmt->get_result()->fetch_assoc();
 		$stmt->close();
-
-		//below if for the star rating for each event on event.php
-		$stmt = $connection->prepare(
-			"SELECT ROUND(AVG(Rating), 1) AS avg_rating, COUNT(*) AS rating_count, COUNT(*) AS rating_count
-			FROM EventRatings WHERE EventID = ?"
-		);
-		$stmt->bind_param("s", $eventId);
-		$stmt->execute();
-		$stats = $stmt->get_result()->fetch_assoc();
-		$stmt->close();
-
-		$event = formatEvent($row);
-		$event["avg_rating"] = $stats["avg_rating"]; //null if no one has voted
-		$event["rating"] = (int) $stats["rating_count"];
-		//ends here for star rating code
-
+	
 		if (!$row){
 			return ["success" => false, "message" => "Event not found"];
 		}
