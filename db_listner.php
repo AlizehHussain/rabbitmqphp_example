@@ -1533,6 +1533,464 @@ function doGetFriends($sessionToken){
 	}
 }
 
+function doCreateGroup($sessionToken, $groupName)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session or expired session"
+        ];
+    }
+
+    // get the user id
+    $userID = (int) $result["user_id"];
+
+    // clean the group name
+    $groupName = trim($groupName);
+
+    // check if the group name is empty
+    if ($groupName === "") {
+        return [
+            "success" => false,
+            "message" => "Group name is required"
+        ];
+    }
+
+    // check if the group name is longer than 100 characters
+    if (strlen($groupName) > 100) {
+        return [
+            "success" => false,
+            "message" => "Group name cannot be longer than 100 characters"
+        ];
+    }
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+        // start the transaction
+        $connection->begin_transaction();
+
+        // insert the new group
+        $stmt = $connection->prepare(
+            "INSERT INTO FriendGroups (GroupName, CreatedID) VALUES (?, ?)"
+        );
+        $stmt->bind_param("si", $groupName, $userID);
+        $stmt->execute();
+
+        // get the new group id
+        $groupID = $connection->insert_id;
+
+        $stmt->close();
+
+        // add the creator as a group member
+        $stmt = $connection->prepare(
+            "INSERT INTO GroupMembers (GroupID, MemberID) VALUES (?, ?)"
+        );
+        $stmt->bind_param("ii", $groupID, $userID);
+        $stmt->execute();
+        $stmt->close();
+
+        // save both inserts
+        $connection->commit();
+
+        return [
+            "success" => true,
+            "message" => "Group created successfully",
+            "group_id" => $groupID
+        ];
+    }
+    catch (Throwable $e) {
+
+        // undo the inserts if something goes wrong
+        $connection->rollback();
+
+        // log the error
+        error_log("Create group error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to create group"
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doGetGroups($sessionToken)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session or expired session"
+        ];
+    }
+
+    // get the user id
+    $userID = (int) $result["user_id"];
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // get all groups that the user is a member of
+        $stmt = $connection->prepare(
+            "SELECT FriendGroups.GroupID, FriendGroups.GroupName
+            FROM GroupMembers
+            JOIN FriendGroups
+                ON GroupMembers.GroupID = FriendGroups.GroupID
+            WHERE GroupMembers.MemberID = ?
+            ORDER BY FriendGroups.GroupName"
+        );
+
+        $stmt->bind_param("i", $userID);
+        $stmt->execute();
+
+        // get the group information
+        $check = $stmt->get_result();
+
+        // create an empty list for the groups
+        $groups = [];
+
+        // go through each group and add it to the list
+        while ($row = $check->fetch_assoc()) {
+            $groups[] = $row;
+        }
+
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "Groups retrieved successfully",
+            "groups" => $groups
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Get groups error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to retrieve groups"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doCreateInvite($sessionToken, $groupID)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session"
+        ];
+    }
+
+    // get the user id and group id
+    $userID = (int) $result["user_id"];
+    $groupID = (int) $groupID;
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // check if the user is part of this group
+        $stmt = $connection->prepare(
+            "SELECT GroupID
+            FROM GroupMembers
+            WHERE GroupID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("ii", $groupID, $userID);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the user is a member of the group
+        if ($check->num_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "You're not part of this group"
+            ];
+        }
+
+        $stmt->close();
+
+        // generate the invite token
+        $rawToken = keyGenerator($userID);
+
+        // hash the token before storing it
+        $inviteToken = hash('sha256', $rawToken);
+
+        // insert the invite into the database
+        $stmt = $connection->prepare(
+            "INSERT INTO GroupInvites (GroupID, InviteToken, CreatedBy, ExpiresAt)
+            VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))"
+        );
+
+        $stmt->bind_param("isi", $groupID, $inviteToken, $userID);
+        $stmt->execute();
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "Invite created successfully",
+            "invite_token" => $rawToken
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Create invite error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to create invite"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doJoinGroup($sessionToken, $inviteToken)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session"
+        ];
+    }
+
+    // get the user id
+    $userID = (int) $result["user_id"];
+
+    // check if the invite token is empty
+    $inviteToken = trim($inviteToken);
+
+    if ($inviteToken === "") {
+        return [
+            "success" => false,
+            "message" => "Invite token is required"
+        ];
+    }
+
+    // hash the invite token
+    $inviteTokenHash = hash('sha256', $inviteToken);
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // check if the invite token is valid and has not expired
+        $stmt = $connection->prepare(
+            "SELECT GroupID
+            FROM GroupInvites
+            WHERE InviteToken = ? AND ExpiresAt > NOW()"
+        );
+
+        $stmt->bind_param("s", $inviteTokenHash);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the invite exists
+        if ($check->num_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "Invalid or expired invite"
+            ];
+        }
+
+        // get the group id
+        $row = $check->fetch_assoc();
+        $groupID = (int) $row["GroupID"];
+
+        $stmt->close();
+
+        // check if the user is already in the group
+        $stmt = $connection->prepare(
+            "SELECT GroupID
+            FROM GroupMembers
+            WHERE GroupID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("ii", $groupID, $userID);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the user is already a member
+        if ($check->num_rows > 0) {
+            $stmt->close();
+
+            return [
+                "success" => true,
+                "message" => "You're already in this group"
+            ];
+        }
+
+        $stmt->close();
+
+        // add the user to the group
+        $stmt = $connection->prepare(
+            "INSERT INTO GroupMembers (GroupID, MemberID)
+            VALUES (?, ?)"
+        );
+
+        $stmt->bind_param("ii", $groupID, $userID);
+        $stmt->execute();
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "You joined the group successfully"
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Join group error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to join group"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doGetGroupMembers($sessionToken, $groupID)
+
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session"
+        ];
+    }
+
+    // get the user id and group id
+    $userID = (int) $result["user_id"];
+    $groupID = (int) $groupID;
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // check if the user is part of this group
+        $stmt = $connection->prepare(
+            "SELECT GroupID
+            FROM GroupMembers
+            WHERE GroupID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("ii", $groupID, $userID);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the user is a member of the group
+        if ($check->num_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "You're not part of this group"
+            ];
+        }
+
+        $stmt->close();
+
+        // get the usernames of the group members
+        $stmt = $connection->prepare(
+            "SELECT users.username
+            FROM GroupMembers
+            JOIN users
+                ON GroupMembers.MemberID = users.uid
+            WHERE GroupMembers.GroupID = ?"
+        );
+
+        $stmt->bind_param("i", $groupID);
+        $stmt->execute();
+
+        // get the member information
+        $check = $stmt->get_result();
+
+        // create an empty list for the members
+        $members = [];
+
+        // go through each member and add them to the list
+        while ($row = $check->fetch_assoc()) {
+            $members[] = $row;
+        }
+
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "Group members retrieved successfully",
+            "members" => $members
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Get group members error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to retrieve group members"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
 function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
@@ -1590,6 +2048,16 @@ function requestProcessor($request){
 				return doRespondFriendRequest($request["session_token"] ?? "", $request["friend_id"] ?? 0, $request["action"] ?? "");
 			case "get_friends":
 				return doGetFriends($request["session_token"] ?? "");
+			case "create_group":
+				return doCreateGroup($request["session_token"] ?? "", $request["group_name"] ?? "");
+			case "get_groups":
+				return doGetGroups($request["session_token"] ?? "");
+			case "create_invite":
+				return doCreateInvite($request["session_token"] ?? "", $request["group_id"] ?? "");
+			case "join_group":
+				return doJoinGroup($request["session_token"] ?? "", $request["invite_token"] ?? "");
+			case"get_group_members":
+				return doGetGroupMembers($request["session_token"] ?? "", $request["group_id"] ?? "");
 			default:
 				return [
 					"success" => false,

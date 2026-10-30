@@ -19,7 +19,11 @@
     <p id="message"></p>
 
     <h3>Suggestions</h3>
+    <!--adding results para-->
+    <p id="result"></p>
+
     <ul id="suggestionList"></ul>
+
 <!--Link to other pages-->
 <p>
     <a href="my_hangouts.html">My Hangouts</a> |
@@ -29,15 +33,19 @@
 
     <script>
 
-        // Get the session token and hangout ID
+        // get the token and hangoutid
         const session_token = sessionStorage.getItem("session_token");
         const hangoutID = new URLSearchParams(window.location.search).get("hangout_id");
 
-        // Get the HTML elements
+        // get the elements
         const messagebox = document.getElementById("message");
+        //event id
         const eventDropdown = document.getElementById("event_id");
+        //list of suggestions
         const suggestionList = document.getElementById("suggestionList");
         const suggestForm = document.getElementById("suggestForm");
+        //voting results
+        const result = document.getElementById("result");
 
         // Check if the session token and hangout ID exist
         if (!session_token || !hangoutID) {
@@ -101,7 +109,43 @@
 
                     // Clear the old suggestions
                     suggestionList.innerHTML = "";
+                    // lets find the highest vote count
+                    let winningVote = 0;
+                    // go through every suggestion to count votes for each event
+                    data.suggestions.forEach(function(suggestion) {
+                        // check if a specific suggestion has more votes than the event with the highest votes
+                        if (Number(suggestion.VoteCount) > winningVote) {
+                             winningVote = Number(suggestion.VoteCount);}
+                            });
+                            // check if votes are empty
+                            if (winningVote === 0) {
+                                result.textContent = "No one voted yet";
+                            }
+                            else {// two events could be winner so need array
+                                const winners = [];
+                                // go through each suggestion
+                                data.suggestions.forEach(function(suggestion) {
+                                    // check if the suggestion has the highest votes
+                                    if (Number(suggestion.VoteCount) === winningVote) {
+                                        winners.push(suggestion);
+                                    }
+                                });
+                                // get the names of the winnert
+                                const winnerNames = [];
+                                winners.forEach(function(suggestion) {
+                                    winnerNames.push(suggestion.EventName);
+                                });
+                                // display the winner or tie
+                                if (winners.length === 1) {
+                                    result.textContent =
+                                    "Winner: " + winnerNames[0] + " (" + winningVote + " votes)";
+                                }
+                                else {
+                                    result.textContent = "Tied: " + winnerNames.join(", ") + " (" + winningVote + " votes each)";
+                                 }
+                                }
 
+	
                     // Check if there are any suggestions
                     if (!data.suggestions || data.suggestions.length == 0) {
                         const li = document.createElement("li");

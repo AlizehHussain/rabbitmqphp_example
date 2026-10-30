@@ -64,9 +64,17 @@
         {
             // if the login details are correct, it stores token into a session storage
             sessionStorage.setItem("session_token", data.session_token);
-            //redirect to home page
+            // check if there is a pending invite
+            const pendingInvite = sessionStorage.getItem("pending_invite");
+            if (pendingInvite) {// remove the saved invite
+            sessionStorage.removeItem("pending_invite");
+            // go to the invite link
+            window.location.href = "join_group.html?token=" + encodeURIComponent(pendingInvite);
+        }
+        else {
+            // go to the home page
             window.location.href = "home.php";
-            
+        }  
         }
         else{
             // else tells the user that the login details were incorrect, and doesn't store them
