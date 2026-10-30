@@ -408,6 +408,34 @@ function doGetRec($sessionToken){
 	}
 }
 
+// Puts an email job on emailQueue, where James's emailListener.php picks it up
+// and sends it through the team Gmail.
+// publish() drops the message on the queue and does NOT wait for an answer,
+// so saving an event never gets stuck waiting on the email.
+function sendEmailJob($template, $info){
+	try {
+		// [emailServer] in testRabbitMQ.ini points at emailExchange / emailQueue
+		$client = new rabbitMQClient("testRabbitMQ.ini", "emailServer");
+
+		// This is the exact format emailListener.php expects
+		$client->publish([
+			"type"     => "send_email",
+			"template" => $template,   // "pick_confirmation" or "event_reminder"
+			"to"       => $info["email"],
+			"event"    => [
+				"name"  => $info["EventName"],
+				"date"  => $info["EventDate"],
+				"venue" => $info["Venue"],
+				"city"  => $info["City"],
+				"url"   => $info["TicketURL"]
+			]
+		]);
+	} catch (Throwable $e){
+		// If the email fails, the save still counts. We just log it.
+		error_log("Email job error: " . $e->getMessage());
+	}
+}
+
 function doSavePick($sessionToken, $eventID){
 	$validation = doValidate($sessionToken);
 
@@ -469,6 +497,24 @@ function doSavePick($sessionToken, $eventID){
 		$added = $stmt->affected_rows > 0; //if sql inserted a new row, the value is true
 
 		$stmt->close();
+
+		// Only email if this is a NEW save (not "Event already saved")
+		if ($added){
+			// Get the user's email and the event details for the email
+			$stmt = $connection->prepare(
+				"SELECT u.email, e.EventName, e.EventDate, e.Venue, e.City, e.TicketURL
+				FROM users u, Events e
+				WHERE u.uid = ? AND e.EventID = ?"
+			);
+			$stmt->bind_param("is", $userID, $eventID);
+			$stmt->execute();
+			$info = $stmt->get_result()->fetch_assoc();
+			$stmt->close();
+
+			if ($info){
+				sendEmailJob("pick_confirmation", $info);
+			}
+		}
 
 		return [
 			"success" => true,
