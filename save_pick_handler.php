@@ -21,7 +21,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST"){
 	exit;
 }
 
-$data = json_decode(file_get_contents("php://input"), true);
+$data = json_decode(file_get_contents("php://input"), true); //php://input reads the raw request body, we retrieve it then convert the json into a php array
 
 //read JSON sent
 if (!is_array($data)){
@@ -40,7 +40,7 @@ $sessionToken = $data["session_token"] ?? "";
 $eventID = $data["event_id"] ?? "";
 
 if (!is_string($sessionToken) || $sessionToken === "" || !is_string($eventID) || trim($eventID) === ""){
-	http_response_code(400);
+	http_response_code(400); //bad request
 
 	echo json_encode([
 		"success" => false,
