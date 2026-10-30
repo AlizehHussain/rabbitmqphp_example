@@ -17,7 +17,10 @@
 </form>
 <p id="message"></p>
 <!-- adding link to home page -->
-<p>Go back to home <a href="home.php">Home</a></p>
+<p>Go back to home <a href="home.php">Home</a> |
+    <a href="my_hangouts.html"> My Hangouts</a>
+
+</p>
 
 <script> 
 //validating the form values
@@ -27,6 +30,7 @@
         //dont let them do anything if they are not logged in
         if (!session_token ) {
             alert("Please log in first");
+            window.location.href = "login.php";
            return false;
         }
         //read event id
@@ -118,7 +122,7 @@
 
     // This function sends the input to the hanngout handler and receives a response
     async function sendHangout(session_token, eventID, usernames) {
-
+        
         //get the message paragraph to be displayed for the user
         const messagebox = document.getElementById('message');
         
@@ -136,7 +140,19 @@
         
         // set the reply into paragraph and a message if there is no reply 
         messagebox.textContent = data.message || "No message about hangout being confirmed";
-            
+        // check if the hangout was actually created
+        if (data.success === true) {
+            //link to suggestions page
+            const link = document.createElement("a");
+            //pass the hangout id to suggestion page
+            link.href = "suggest_vote.html?hangout_id=" + data.hangout_id;
+            //display the text
+            link.textContent = "Suggest events and vote";
+            //link to success message
+            messagebox.appendChild(document.createElement("br"));
+            messagebox.appendChild(link);
+        }
+    
         } catch (error) {
             //failure message for user
             messagebox.textContent = "Creation of hangout failed! Please try again";

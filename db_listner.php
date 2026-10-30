@@ -531,7 +531,7 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	$stmt->close();
 // checking if the database had no reults for finding the event
 
-	if (!row) {
+	if (!$row) {
 		return [
 		// return event not found if it does not exist
 		"success" => false,
@@ -650,6 +650,456 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 		$connection->close();
 	}
 }
+
+function doGetHangouts($sessionToken){
+    // get the user session token
+    $result = doValidate($sessionToken);
+
+    // check if the session is still valid
+    if (!is_array($result) || ($result["success"] ?? false) !== true){
+        return [
+            "success" => false,
+            "message" => "Invalid or expired session"
+        ];
+    }
+
+    // get the logged-in user's id
+    $userID = (int) $result["user_id"];
+
+    // get connection to the database
+    $connection = getConnection();
+
+    try{
+        // get hangouts for the logged-in user
+        $stmt = $connection->prepare(
+            "SELECT
+                Hangouts.HangoutID, Events.EventName,
+                Events.EventDate,Events.Venue,
+                users.username AS CreatorName,
+                HangoutMembers.Response
+            FROM HangoutMembers
+            JOIN Hangouts
+                ON HangoutMembers.HangoutID = Hangouts.HangoutID
+            JOIN Events
+                ON Hangouts.EventID = Events.EventID
+            JOIN users
+                ON Hangouts.CreatedID = users.uid
+            WHERE HangoutMembers.MemberID = ?
+            ORDER BY Events.EventDate, Hangouts.HangoutID"
+        );
+
+        // bind the logged-in user's id
+        $stmt->bind_param("i", $userID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query results
+        $result = $stmt->get_result();
+
+        // array to store the hangouts
+        $hangouts = [];
+
+        // fetch each hangout and add it to the array
+        while ($row = $result->fetch_assoc()){
+            $hangouts[] = $row;
+
+        }
+
+        // close the query
+        $stmt->close();
+
+        // return the hangouts
+        return [
+            "success" => true,
+            "message" => "Hangouts retrieved successfully",
+            "hangouts" => $hangouts
+        ];
+
+    } catch (Throwable $e){
+        // log the error
+        error_log("Get hangouts error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to retrieve hangouts"
+        ];
+
+    } finally {
+        // close the database connection
+        $connection->close();
+    }
+}
+// suggestion eventssss
+function doSuggestEvent($sessionToken, $hangoutID, $eventID){
+
+    // check if the user's session is valid
+    $result = doValidate($sessionToken);
+
+    // reject the request if the session is invalid
+    if (!is_array($result) || ($result["success"] ?? false) !== true){
+        return [
+            "success" => false,
+            "message" => "Invalid or expired session"
+        ];
+    }
+
+    // get the logged-in user's id
+    $userID = (int) $result["user_id"];
+
+    // get connection to the database
+    $connection = getConnection();
+
+    try{
+        // check if the user is a member of this hangout
+        $stmt = $connection->prepare(
+            "SELECT HangoutID
+            FROM HangoutMembers
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        // bind the hangout id and user id
+        $stmt->bind_param("ii", $hangoutID, $userID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // check if the user belongs to this hangout
+        $row = $check->fetch_assoc();
+
+        // close the query
+        $stmt->close();
+
+        // reject the request if the user is not a member
+        if (!$row){
+            return [
+                "success" => false,
+                "message" => "You're not part of this hangout"
+            ];
+        }
+
+        // check if the event exists
+        $stmt = $connection->prepare(
+            "SELECT EventID
+            FROM Events
+            WHERE EventID = ?"
+        );
+
+        // bind the event id
+        $stmt->bind_param("s", $eventID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // check if the event exists
+        $row = $check->fetch_assoc();
+
+        // close the query
+        $stmt->close();
+
+        // reject the request if the event does not exist
+        if (!$row){
+            return [
+                "success" => false,
+                "message" => "Event does not exist"
+            ];
+        }
+
+        // insert the event suggestion
+        $stmt = $connection->prepare(
+            "INSERT INTO HangoutSuggestions
+            (HangoutID, EventID, SuggestedBy)
+            VALUES (?, ?, ?)"
+        );
+
+        // bind the hangout id, event id and user id
+        $stmt->bind_param("isi", $hangoutID, $eventID, $userID);
+
+        // execute the insert
+        $stmt->execute();
+
+        // close the query
+        $stmt->close();
+
+        // return a success message
+        return [
+            "success" => true,
+            "message" => "Event suggested successfully"
+        ];
+
+    } catch (Throwable $e){
+
+        // log the real error
+        error_log("Suggest event error: " . $e->getMessage());
+
+        // return a generic error message
+        return [
+            "success" => false,
+            "message" => "Unable to suggest event"
+        ];
+
+    } finally {
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doVote($sessionToken, $suggestionID){
+
+    // check if the user's session is valid
+    $result = doValidate($sessionToken);
+
+    // reject the request if the session is invalid
+    if (!is_array($result) || ($result["success"] ?? false) !== true){
+        return [
+            "success" => false,
+            "message" => "Invalid or expired session"
+        ];
+    }
+
+    // get the logged-in user's id
+    $userID = (int) $result["user_id"];
+
+    // convert the suggestion id to an integer
+    $suggestionID = (int) $suggestionID;
+
+    // get connection to the database
+    $connection = getConnection();
+
+    try{
+        // find the hangout id for this suggestion
+        $stmt = $connection->prepare(
+            "SELECT HangoutID
+            FROM HangoutSuggestions
+            WHERE HangoutSuggestionID = ?"
+        );
+
+        // bind the suggestion id
+        $stmt->bind_param("i", $suggestionID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // check if the suggestion exists
+        $row = $check->fetch_assoc();
+
+        // close the query
+        $stmt->close();
+
+        // reject the request if the suggestion does not exist
+        if (!$row){
+            return [
+                "success" => false,
+                "message" => "Suggestion not found"
+            ];
+        }
+
+        // get the hangout id
+        $hangoutID = (int) $row["HangoutID"];
+
+        // check if the user is a member of this hangout
+        $stmt = $connection->prepare(
+            "SELECT HangoutID
+            FROM HangoutMembers
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        // bind the hangout id and user id
+        $stmt->bind_param("ii", $hangoutID, $userID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // check if the user belongs to this hangout
+        $row = $check->fetch_assoc();
+
+        // close the query
+        $stmt->close();
+
+        // reject the request if the user is not a member
+        if (!$row){
+            return [
+                "success" => false,
+                "message" => "You're not part of this hangout"
+            ];
+        }
+
+        // insert the vote
+        $stmt = $connection->prepare(
+            "INSERT INTO HangoutVotes
+            (HangoutSuggestionID, UserID)
+            VALUES (?, ?)"
+        );
+
+        // bind the suggestion id and user id
+        $stmt->bind_param("ii", $suggestionID, $userID);
+
+        // execute the insert
+        $stmt->execute();
+
+        // close the query
+        $stmt->close();
+
+        // return a success message
+        return [
+            "success" => true,
+            "message" => "Vote submitted successfully"
+        ];
+
+    } catch (Throwable $e){
+
+        // log the real error
+        error_log("Vote error: " . $e->getMessage());
+
+        // return a generic error message
+        return [
+            "success" => false,
+            "message" => "Unable to submit vote"
+
+        ];
+
+    } finally {
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doGetSuggestions($sessionToken, $hangoutID){
+
+    // check if the user's session is valid
+    $result = doValidate($sessionToken);
+
+    // reject the request if the session is invalid
+    if (!is_array($result) || ($result["success"] ?? false) !== true){
+        return [
+            "success" => false,
+            "message" => "Invalid or expired session"
+        ];
+    }
+
+    // get the logged-in user's id
+    $userID = (int) $result["user_id"];
+
+    // convert the hangout id to an integer
+    $hangoutID = (int) $hangoutID;
+
+    // get connection to the database
+    $connection = getConnection();
+
+    try{
+        // check if the user is a member of this hangout
+        $stmt = $connection->prepare(
+            "SELECT HangoutID
+            FROM HangoutMembers
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        // bind the hangout id and user id
+        $stmt->bind_param("ii", $hangoutID, $userID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // check if the user belongs to this hangout
+        $row = $check->fetch_assoc();
+
+        // close the query
+        $stmt->close();
+
+        // reject the request if the user is not a member
+        if (!$row){
+            return [
+                "success" => false,
+                "message" => "You're not part of this hangout"
+            ];
+        }
+
+        // get all suggestions for this hangout
+        $stmt = $connection->prepare(
+            "SELECT
+                HangoutSuggestions.HangoutSuggestionID,
+                Events.EventName,
+                Events.EventDate,
+                Events.Venue,
+                COUNT(HangoutVotes.UserID) AS VoteCount,
+                SUM(CASE
+                    WHEN HangoutVotes.UserID = ? THEN 1
+                    ELSE 0
+                END) AS UserVoted
+            FROM HangoutSuggestions
+            JOIN Events
+                ON HangoutSuggestions.EventID = Events.EventID
+            LEFT JOIN HangoutVotes
+                ON HangoutSuggestions.HangoutSuggestionID = HangoutVotes.HangoutSuggestionID
+            WHERE HangoutSuggestions.HangoutID = ?
+            GROUP BY
+                HangoutSuggestions.HangoutSuggestionID,
+                Events.EventName,
+                Events.EventDate,
+                Events.Venue
+            ORDER BY HangoutSuggestions.HangoutSuggestionID"
+        );
+
+        // bind the user id and hangout id
+        $stmt->bind_param("ii", $userID, $hangoutID);
+
+        // execute the query
+        $stmt->execute();
+
+        // get the query result
+        $check = $stmt->get_result();
+
+        // create an array for the suggestions
+        $suggestions = [];
+
+        // loop through the results and add each suggestion to the array
+        while ($row = $check->fetch_assoc()){
+            $suggestions[] = $row;
+        }
+
+        // close the query
+        $stmt->close();
+
+        // return the suggestions
+        return [
+            "success" => true,
+            "message" => "Suggestions retrieved successfully",
+            "suggestions" => $suggestions
+        ];
+
+    } catch (Throwable $e){
+
+        // log the real error
+        error_log("Get suggestions error: " . $e->getMessage());
+
+        // return a generic error message
+        return [
+            "success" => false,
+            "message" => "Unable to retrieve suggestions"
+
+        ];
+
+    } finally {
+        // close the database connection
+        $connection->close();
+    }
+}
+
 
 function doGetEvents(){
 	$connection = getConnection();
@@ -1075,8 +1525,17 @@ function requestProcessor($request){
 			case "create_hangout":
 				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
 				$request["invitee_usernames"] ?? []);
+			case "get_hangouts":
+				return doGetHangouts($request["session_token"] ?? "");
 			case "get_events":
 				return doGetEvents();
+			case "suggest_event":
+				return doSuggestEvent ($request["session_token"] ?? "", $request["hangout_id"] ?? "",
+				$request["event_id"] ?? "");
+			case "vote_event":
+				return doVote ($request["session_token"] ?? "", $request["suggestion_id"] ?? "");
+			case "get_suggestions":
+				return doGetSuggestions ($request["session_token"] ?? "", $request["hangout_id"] ?? "");	
 			case "send_friend_request":
 				return doSendFriendRequest($request["session_token"] ?? "", $request["friend_username"] ?? "");
 			case "get_friend_requests":
