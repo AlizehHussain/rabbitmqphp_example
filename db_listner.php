@@ -280,151 +280,6 @@ function doSyncEvents($events){
 	}
 }
 
-//turns a  dtatabse row into the same field names the DMZ script already uses
-function formatEvent($row){
-return [
-	"event_id" => $row["EventID"],
-	"name" => $row["EventName"],
-	"date" => $row["EventDate"],
-	"venue" => $row["Venue"],
-	"city" => $row["City"],
-	"category" => $row["Category"],
-	"url" => $row["TicketURL"]
-	];
-}
-
-function doSearchEvents($keyword, $city, $category){
-	$keyword = trim($keyword);
-	$city = trim($city);
-	$category = trim($category);
-
-	$connection = getConnection();
-
-	try {
-		//this will only show upcoming events or the events with no date yet
-		$sql = "SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
-				FROM Events
-				WHERE (EventDate IS NULL OR EventDate >= CURDATE())";
-		$types = "";
-		$params = [];
-
-		//escape % and _ so user input is searched literally
-		if ($keyword !== ""){
-			$like = "%" . addcslashes($keyword, "%_\\") . "%";
-			$sql .= " AND (EventName LIKE ? OR Venue LIKE ?)";
-			$types .= "ss";
-			$params[] = $like;
-			$params[] = $like;
-		}
-		if ($city !== ""){
-			$sql .= " AND City LIKE ?";
-			$types .= "s";
-			$params[] = "%" . addcslashes($city, "%_\\") . "%";
-		}
-		if ($category !== ""){
-			$sql .= " AND Category = ?";
-			$types .= "s";
-			$params[] = $category;
-		}
-
-		$sql .= " ORDER BY EventDate IS NULL, EventDate ASC LIMIT 50";
-
-		$stmt = $connection->prepare($sql);
-		if ($types !== ""){
-			$stmt->bind_param($types, ...$params);
-		}
-		$stmt->execute();
-		$result = $stmt->get_result();
-
-		$events = [];
-		while ($row = $result->fetch_assoc()){
-			$events[] = formatEvent($row);
-		}
-		$stmt->close();
-
-		return [
-			"success" => true,
-			"events"  => formatEvent($row)
-		];
-	} catch (Throwable $e){
-		error_log("Event search error: " . $e->getMessage());
-		return [
-			"success" => false,
-			"message" => "Failed to search events"
-		];
-	} finally {
-		$connection->close();
-	}
-}
-function doRateEvent($sessionToken, $eventID, $rating){
-
-	$validation = doValidate($sessionToken);
-	if (($validation["success"] ?? false) !== true){
-		return ["success" => false, "message" => "invalid or expired session"];
-	}
-
-	$userID = (int) $validation["user_id"];
-	$eventID = (int) $eventID;
-	$rating = (int) $rating;
-
-	if ($eventID <= 0 || $rating < 1 || $rating > 5){
-		return ["success" => false, "message" => "invalid rating"];
-	}
-
-	$connection = getConnection();
-	try {
-		$stmt = $connection->prepare( 
-			"INSERT INTO EventRatings (UserID, EventID, Rating)
-			VALUES(?,?,?)
-			ON DUPLICATE KEY UPDATE Rating =VALUES(Rating)"
-		);
-	$stmt->bind_param("iii", $userID, $eventID, $rating);
-	$stmt->execute();
-	$stmt->close();
-	} catch (Throwable $e){
-		error_log("Rate event error: " . $e->getMessage());
-		return ["success" => false, "message" => "Unable to save rating"];
-	} finally {
-		$connection->close();
-	}
-}
-function doGetEvent($eventId){
-	//same check as the web handler, done again here in case someone bypasses it
-	if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $eventId)){
-		return ["success" => false, "message" => "Invalid event"];
-	}
-
-	$connection = getConnection();
-
-	try {
-		$stmt = $connection->prepare(
-			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
-			FROM Events WHERE EventID = ? LIMIT 1"
-		);
-		$stmt->bind_param("s", $eventId);
-		$stmt->execute();
-		$row = $stmt->get_result()->fetch_assoc();
-		$stmt->close();
-	
-		if (!$row){
-			return ["success" => false, "message" => "Event not found"];
-		}
-
-		return [
-			"success" => true,
-			"event"   => $event
-		];
-	} catch (Throwable $e){
-		error_log("Get event error: " . $e->getMessage());
-		return [
-			"success" => false,
-			"message" => "Failed to load event"
-];
-	} finally {
-		$connection->close();
-	}
-}
-
 function doGetRec($sessionToken){
 	$validation = doValidate($sessionToken);
 
@@ -442,7 +297,7 @@ function doGetRec($sessionToken){
 			"SELECT e.Category, e.City
 			FROM UserPicks p
 			JOIN Events e ON p.EventID = e.EventID
-			WHERE p.UserID = ?"
+			WHERE p.USERID = ?"
 		);
 
 		$stmt->bind_param("i", $userID);
@@ -488,7 +343,7 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_result();
+		$result = $stmt->get_results();
 
 		$recommendations = [];
 
@@ -632,6 +487,8 @@ function doSavePick($sessionToken, $eventID){
 		$connection->close();
 	}
 }
+
+
 
 function doCreateHangout($sessionToken, $eventID, $inviteeUsernames) 
 {
@@ -1190,7 +1047,7 @@ function requestProcessor($request){
 
 	try {
 		switch($request["type"]){
-	//gonna use register to explain the flow of this thing since its what I made
+			//gonna use register to explain the flow of this thing since its what I made
 			//register sends username,email,password to rabbitmq, requestProcessor detects the type then calls the associated function, in this case doRegister
 			//doRegister will validate the input, connect to MySQL, check for dupes, hash the password, then insert the new user
 			//success is then true if it all works, false and displays an error. The rests are basically do the exact same flow with their own little twist.
@@ -1211,26 +1068,10 @@ function requestProcessor($request){
 				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "sync_events":
 				return doSyncEvents($request["events"] ?? []);
-			case "search_events":
-				return doSearchEvents(
-					$request["keyword"]??"",
-                                	$request["city"]??"",
-                                	$request["category"]??""
-				);
-			case "get_event":
-				return doGetEvent($request["event_id"] ?? "");
-
-
 			case "get_recommendations":
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
-			case "rate_event":
-				return doRateEvent(
-					$request["session_token"] ?? "",
-					$request["event_id"] ?? 0,
-					$request["rating"] ?? 0
-				);
 			case "create_hangout":
 				return doCreateHangout($request["session_token"] ?? "", $request["event_id"] ?? "",
 				$request["invitee_usernames"] ?? []);

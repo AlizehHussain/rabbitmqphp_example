@@ -29,7 +29,7 @@ try{
 	$response = $client->send_request($request);
 
 	if (!is_array($response)){
-		http_response_code(502); //502 is for an invalid response from the backend
+		http_response_code(502);
 
 		echo json_encode([
 			"success" => false,
