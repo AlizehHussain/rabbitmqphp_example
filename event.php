@@ -44,7 +44,7 @@
 
 <!-- Everything is inside this div and stays hidden until we make sure the user is logged in -->
 <div id="content" hidden>
-    <p><a href="events.php">Back to events</a> | <a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
+    <p><a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
 
  <!-- Shows "Loading..." or an error message if something goes wrong -->
     <p id="status">Loading...</p>
@@ -139,45 +139,48 @@ const eventId = params.get('id');
     }
 
     try {
-// Ask eventsHandler.php for this event. It checks the login again,
-// then sends "get_event" through RabbitMQ to the database listener.
-        const data = await sendRequest("eventsHandler.php", {
-            typeRequest: 'get_event',
-            session_token: sessionStorage.getItem('session_token'),
-            event_id: eventId
-        });
+// Get the list of upcoming events from get_events_handler.php
+// (the same list the home page shows). It's a GET request, so we send no data.
+        const response = await fetch("get_events_handler.php");
+        const data = await response.json();
 
- // If the event doesn't exist, or something went wrong on the server
-        if (!data.success || !data.event) {
-            status.textContent = data.message || "Event not found.";
+// If something went wrong on the server
+        if (!data.success) {
+            status.textContent = data.message || "Could not load event.";
             return;
         }
 
-        const ev = data.event;
+// find() goes through the list and gives back the event whose ID
+// matches the one in the address (or undefined if none match)
+        const ev = data.events.find(function (e) {
+            return e.EventID === eventId;
+        });
+
+        if (!ev) {
+            status.textContent = "Event not found.";
+            return;
+        }
 
         // Put the event name in the browser tab
-        document.title = ev.name;
+        document.title = ev.EventName;
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
-        document.getElementById('name').textContent = ev.name;
-        document.getElementById('date').textContent = ev.date || "Date TBA";
-        document.getElementById('venue').textContent = ev.venue || "TBA";
-        document.getElementById('city').textContent = ev.city || "TBA";
-        document.getElementById('category').textContent = ev.category || "Other";
-
-	
-
+        document.getElementById('name').textContent = ev.EventName;
+        document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+        document.getElementById('venue').textContent = ev.Venue || "TBA";
+        document.getElementById('city').textContent = ev.City || "TBA";
+        document.getElementById('category').textContent = ev.Category || "Other";
 
         // Only show the ticket link if it's a normal https web address
-        if (ev.url && ev.url.startsWith("https://")) {
+        if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
-            link.href = ev.url;
+            link.href = ev.TicketURL;
             link.hidden = false;
         }
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
-	const saveBtn = document.getElementById('saveBtn');i
+	const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
                    saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
         });

@@ -10,7 +10,8 @@
 shows once we've checked that the user is logged in -->
 <div id="content" hidden>
     <h1>Welcome!</h1>
-    <p><a href="logout.php">Log out</a></p>
+    <p><a href="create_hangout.html">Create a Hangout</a> | <a href="my_hangouts.html">My Hangouts</a> | <a href="logout.php">Log out</a></p>
+
 
     <h2>Upcoming Events</h2>
 
