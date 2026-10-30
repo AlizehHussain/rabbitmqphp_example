@@ -44,7 +44,7 @@
 
 <!-- Everything is inside this div and stays hidden until we make sure the user is logged in -->
 <div id="content" hidden>
-    <p><a href="events.php">Back to events</a> | <a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
+    <p><a href="home.php">Home</a> | <a href="logout.php">Log out</a></p>
 
  <!-- Shows "Loading..." or an error message if something goes wrong -->
     <p id="status">Loading...</p>
@@ -126,7 +126,8 @@ async function checkLogin() {
 
 // Loads one event's details and shows them on the page
 async function loadEvent() {
-    const status = document.getElementById('status');
+	const status = document.getElementById('status');
+
 
 // Read the event ID from the address, e.g. event.php?id=whatevrabsbshaua
 const params = new URLSearchParams(window.location.search);
@@ -138,10 +139,10 @@ const eventID = params.get('id');
         return;
     }
 
-}
+
     try {
     //using get_event_handler to fetch all events
-const data = await sendID("ID_handler.php", {
+const data = await sendRequest("ID_handler.php", {
             typeRequest: 'check_eventID',
             eventID: eventID
 	
@@ -154,17 +155,17 @@ const data = await sendID("ID_handler.php", {
         }
 	
 	
-
+	const ev = data.event;
         // Put the event name in the browser tab
         document.title = ev.name;
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
-        document.getElementById('name').textContent = ev.name;
-        document.getElementById('date').textContent = ev.date || "Date TBA";
-        document.getElementById('venue').textContent = ev.venue || "TBA";
-        document.getElementById('city').textContent = ev.city || "TBA";
-        document.getElementById('category').textContent = ev.category || "Other";
+        document.getElementById('name').textContent = ev.EventName;
+        document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+        document.getElementById('venue').textContent = ev.Venue || "TBA";
+        document.getElementById('city').textContent = ev.City || "TBA";
+        document.getElementById('category').textContent = ev.Category || "Other";
 
 	
 
@@ -177,7 +178,7 @@ const data = await sendID("ID_handler.php", {
         }
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
-	const saveBtn = document.getElementById('saveBtn');i
+	const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
                    saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
         });
@@ -186,7 +187,8 @@ const data = await sendID("ID_handler.php", {
         status.hidden = true;
         document.getElementById('details').hidden = false;
     } catch (e) {
-        status.textContent = "Could not reach the server.";
+	console.error(e);
+        status.textContent = "Error:" + e.message;
     }
 }
 

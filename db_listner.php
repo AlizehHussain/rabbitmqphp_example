@@ -1419,6 +1419,39 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 	}
 }
 
+function eventIDChecker($eventID){
+$connection = getConnection();
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+			FROM Events
+			WHERE EventID = ?"
+		);
+		
+		$stmt->bind_param("s",$eventID);
+
+		$stmt->execute();
+
+		//returns matching array to eventID
+		$event = $stmt->get_result()->fetch_assoc();
+
+		
+		return [
+			"success" => true,
+			"event" => $event
+		];
+	} catch (Throwable $e){
+		error_log("Event ID error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
 function doGetFriends($sessionToken){
 	$validation = doValidate($sessionToken);
 
@@ -1520,6 +1553,8 @@ function requestProcessor($request){
 				return doSyncEvents($request["events"] ?? []);
 			case "get_recommendations":
 				return doGetRec($request["session_token"] ?? "");
+			case "check_eventID":
+				return eventIDChecker($request["event_ID"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
 			case "create_hangout":

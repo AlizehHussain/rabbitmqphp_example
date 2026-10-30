@@ -1,4 +1,6 @@
 <?php
+
+header("Content-Type: application/json");
 require_once ('path.inc');
 require_once ('get_host_info.inc');
 require_once('rabbitMQLib.inc');
@@ -8,8 +10,8 @@ require_once('rabbitMQLib.inc');
 $data = json_decode(file_get_contents("php://input"), true);
 
 //extracting session token from the data
-$type = $data['check_eventID'] ?? "";
-$eventID = $data['event_ID'] ?? "";
+$type = $data['typeRequest'] ?? "";
+$eventID = $data['eventID'] ?? "";
 
 //makes sure there is an eventID
 if ($eventID === "") {
@@ -31,7 +33,8 @@ if (isset($response["success"]) && $response["success"] === true)
         echo json_encode(
             [
             "success" => true, 
-            ]
+	    "event" => $response["event"] ?? null
+	    ]
             );
         
     }
