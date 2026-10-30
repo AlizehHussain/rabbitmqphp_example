@@ -408,7 +408,7 @@ function doGetEvent($eventId){
 
 		return [
 			"success" => true,
-			"event"   => $event
+			"event"   => formatEvent($row)
 		];
 	} catch (Throwable $e){
 		error_log("Get event error: " . $e->getMessage());
