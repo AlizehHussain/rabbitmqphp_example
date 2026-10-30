@@ -1419,8 +1419,10 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 	}
 }
 
-function eventIDChecker($eventID){
-$connection = getConnection();
+function doRateEvent($eventID, $sessionToken, $clicked, $rating){		
+	$validation = doValidate($sessionToken);
+	$connection = getConnection();
+	$userID = (int) $validation["user_id"];
 
 	try{
 		$stmt = $connection->prepare(
@@ -1428,18 +1430,44 @@ $connection = getConnection();
 			FROM Events
 			WHERE EventID = ?"
 		);
-		
 		$stmt->bind_param("s",$eventID);
 
 		$stmt->execute();
-
 		//returns matching array to eventID
 		$event = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+			
 
+		if ($clicked){
+		$stmt = $connection->prepare(
+			"INSERT INTO Ratings (EventID, UserID, Rating) Values (?,?,?) ON DUPLICATE KEY UPDATE Rating = VALUES(Rating)");
+		$stmt->bind_param("sii", $eventID, $userID, $rating);
+		$stmt->execute();
+		$stmt->close();
+		}
 		
+		$stmt = $connection->prepare(
+			"SELECT COUNT(*) AS total_rows FROM Ratings WHERE EventID = ?");
+		$stmt->bind_param("s", $eventID);
+		$stmt->execute();
+		$nullCheck = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+		if ($nullCheck["total_rows"] > 0) { 
+		$stmt = $connection->prepare(
+			"SELECT AVG(Rating) AS average FROM Ratings WHERE EventID = ?");
+		$stmt->bind_param("s", $eventID);
+		$stmt->execute();
+		$average = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
 		return [
 			"success" => true,
-			"event" => $event
+			"event" => $event,
+			"average" => $average["average"]
+		];
+		}
+		return [
+			"success" => true,
+			"event" => $event,
 		];
 	} catch (Throwable $e){
 		error_log("Event ID error: " . $e->getMessage());
@@ -1553,8 +1581,8 @@ function requestProcessor($request){
 				return doSyncEvents($request["events"] ?? []);
 			case "get_recommendations":
 				return doGetRec($request["session_token"] ?? "");
-			case "check_eventID":
-				return eventIDChecker($request["event_ID"] ?? "");
+			case "rateEvent":
+				return doRateEvent($request["event_ID"] ?? "", $request["sessionToken"] ?? "", $request["clicked"] ?? "", $request["rating"] ?? "");
 			case "save_pick":
 				return doSavePick($request["session_token"] ?? "", $request["event_id"] ?? "");
 			case "create_hangout":

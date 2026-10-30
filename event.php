@@ -82,7 +82,9 @@
 <script src="saveEvent.js"></script>
 
 <script>
-
+const token = sessionStorage.getItem('session_token');
+let clicked = false;
+let rating = 0;
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -141,12 +143,21 @@ const eventID = params.get('id');
 
 
     try {
-    //using get_event_handler to fetch all events
 const data = await sendRequest("ID_handler.php", {
-            typeRequest: 'check_eventID',
-            eventID: eventID
-	
+	typeRequest: 'rateEvent',
+	eventID: eventID,
+	sessionToken: token,
+	clicked: clicked,
+	rating: rating
+		
         });
+var avg = 0;
+avg = Math.round(data.average*100)/100;
+if (Number.isNaN(avg)) {
+	document.getElementById('globalAvg').textContent = "No reviews yet";
+} else {
+document.getElementById('globalAvg').textContent = avg;
+}
 
  // If the event doesn't exist, or something went wrong on the server
         if (!data.success || !data.event) {
@@ -157,7 +168,7 @@ const data = await sendRequest("ID_handler.php", {
 	
 	const ev = data.event;
         // Put the event name in the browser tab
-        document.title = ev.name;
+        document.title = ev.EventName;
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
@@ -166,21 +177,42 @@ const data = await sendRequest("ID_handler.php", {
         document.getElementById('venue').textContent = ev.Venue || "TBA";
         document.getElementById('city').textContent = ev.City || "TBA";
         document.getElementById('category').textContent = ev.Category || "Other";
-
-	
-
-
-        // Only show the ticket link if it's a normal https web address
-        if (ev.url && ev.url.startsWith("https://")) {
+	// Only show the ticket link if it's a normal https web address
+        if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
-            link.href = ev.url;
+            link.href = ev.TicketURL;
             link.hidden = false;
         }
+
+
+function rateEvent(eventID) {
+    document.querySelectorAll('.rating input').forEach(function (input) {
+	input.addEventListener('change', async function () {
+		clicked = true;
+            const r = await sendRequest("ID_handler.php", {
+                typeRequest: 'rateEvent',
+		sessionToken: token,
+		clicked: clicked,
+                eventID: eventID,
+                rating: input.value
+            });
+		if (r.success) {
+		var avg = Math.round(r.average*100)/100;
+        	document.getElementById('globalAvg').textContent = avg;
+            } else {
+                document.getElementById('globalAvg').textContent = r.message || "Could not save rating.";
+            }
+        });
+    });
+}
+	rateEvent(eventID);
+
+        
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
 	const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
-                   saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
+                   saveEvent(eventID, saveBtn, document.getElementById('saveMsg'));
         });
 
         // Hide "Loading..." and show the details
