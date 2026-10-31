@@ -1247,7 +1247,7 @@ function doSendFriendRequest($sessionToken, $friendUsername){
 			WHERE
 				(SenderID = ? AND ReceiverID = ?)
 				OR
-				(SenderID = ? AND Receiver ID = ?)
+				(SenderID = ? AND ReceiverID = ?)
 			LIMIT 1"
 		);
 
@@ -1276,7 +1276,7 @@ function doSendFriendRequest($sessionToken, $friendUsername){
 				];
 			}
 
-			if ($xisting["Status"] === "pending"){
+			if ($existing["Status"] === "pending"){
 				return [
 					"success" => false,
 					"message" => "A friend request is already pending"
@@ -1286,7 +1286,7 @@ function doSendFriendRequest($sessionToken, $friendUsername){
 			//ik same thing below but its for a declined request
 			return [
 				"success" => false,
-				"message" => "A friend request is already pending"
+				"message" => "Friend request declined"
 			];
 		}
 
@@ -1422,7 +1422,7 @@ function doRespondFriendRequest($sessionToken, $friendID, $action){
 			"UPDATE Friends
 			SET Status = ?
 			WHERE FriendID = ?
-			AND Receiver ID = ?
+			AND ReceiverID = ?
 			AND Status = 'pending'"
 		);
 

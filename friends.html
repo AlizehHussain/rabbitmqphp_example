@@ -125,7 +125,7 @@
 		async function loadFriendRequests(){
 			const container = document.getElementById("pendingRequests");
 
-			container.textContent = "Loading requests..."
+			container.textContent = "Loading requests...";
 
 			try{
 				const data = await friendRequest("get_friend_requests");
@@ -137,11 +137,11 @@
 					return;
 				}
 
-				data.requests.forEach(requests => {
+				data.requests.forEach(request => {
 					const row = document.createElement("div");
 
 					const username = document.createElement("span");
-					username.textContent = request.username + "";
+					username.textContent = request.username + " ";
 
 					const acceptButton = document.createElement("button");
 
@@ -170,7 +170,7 @@
 					row.appendChild(declineButton);
 					row.appendChild(document.createElement("hr"));
 
-					container.appendChild(row)
+					container.appendChild(row);
 				});
 			} catch (error) {
 				container.textContent = error.message;
@@ -179,7 +179,7 @@
 
 		async function respondToRequest(friendID, action){
 			try{
-				cont data = await friendRequest("respond_friend_request", {
+				const data = await friendRequest("respond_friend_request", {
 					friend_id: friendID,
 					action: action
 					}
