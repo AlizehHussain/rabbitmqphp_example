@@ -1991,6 +1991,69 @@ function doGetGroupMembers($sessionToken, $groupID)
     }
 }
 
+function doRateEvent($eventID, $sessionToken, $clicked, $rating){		
+	$validation = doValidate($sessionToken);
+	$connection = getConnection();
+	$userID = (int) $validation["user_id"];
+
+	try{
+		$stmt = $connection->prepare(
+			"SELECT EventID, EventName, EventDate, Venue, City, Category, TicketURL
+			FROM Events
+			WHERE EventID = ?"
+		);
+		$stmt->bind_param("s",$eventID);
+
+		$stmt->execute();
+		//returns matching array to eventID
+		$event = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+			
+
+		if ($clicked){
+		$stmt = $connection->prepare(
+			"INSERT INTO Ratings (EventID, UserID, Rating) Values (?,?,?) ON DUPLICATE KEY UPDATE Rating = VALUES(Rating)");
+		$stmt->bind_param("sii", $eventID, $userID, $rating);
+		$stmt->execute();
+		$stmt->close();
+		}
+		
+		$stmt = $connection->prepare(
+			"SELECT COUNT(*) AS total_rows FROM Ratings WHERE EventID = ?");
+		$stmt->bind_param("s", $eventID);
+		$stmt->execute();
+		$nullCheck = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+		if ($nullCheck["total_rows"] > 0) { 
+		$stmt = $connection->prepare(
+			"SELECT AVG(Rating) AS average FROM Ratings WHERE EventID = ?");
+		$stmt->bind_param("s", $eventID);
+		$stmt->execute();
+		$average = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+		return [
+			"success" => true,
+			"event" => $event,
+			"average" => $average["average"]
+		];
+		}
+		return [
+			"success" => true,
+			"event" => $event,
+		];
+	} catch (Throwable $e){
+		error_log("Event ID error: " . $e->getMessage());
+
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve events"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+
+
 function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
@@ -2058,6 +2121,8 @@ function requestProcessor($request){
 				return doJoinGroup($request["session_token"] ?? "", $request["invite_token"] ?? "");
 			case"get_group_members":
 				return doGetGroupMembers($request["session_token"] ?? "", $request["group_id"] ?? "");
+			case "rateEvent":
+				return doRateEvent($request["event_ID"] ?? "", $request["sessionToken"] ?? "", $request["clicked"] ?? "", $request["rating"] ?? "");
 			default:
 				return [
 					"success" => false,
