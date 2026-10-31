@@ -65,7 +65,7 @@
   <input type="radio" id="star1" name="rating" value="1" />
   <label class="star" for="star1" title="Bad" aria-hidden="true"></label>
 </div>
-<span id="globalAvg">Global avg: ...</span>
+<p><strong>Global Rating: </strong><span id="globalAvg">...</span></p>
         <p><strong>Date:</strong> <span id="date"></span></p>
         <p><strong>Venue:</strong> <span id="venue"></span></p>
         <p><strong>City:</strong> <span id="city"></span></p>
@@ -156,7 +156,7 @@ avg = Math.round(data.average*100)/100;
 if (Number.isNaN(avg)) {
 	document.getElementById('globalAvg').textContent = "No reviews yet";
 } else {
-document.getElementById('globalAvg').textContent = avg;
+document.getElementById('globalAvg').textContent = avg + "/5";
 }
 
  // If the event doesn't exist, or something went wrong on the server
@@ -198,7 +198,7 @@ function rateEvent(eventID) {
             });
 		if (r.success) {
 		var avg = Math.round(r.average*100)/100;
-        	document.getElementById('globalAvg').textContent = avg;
+        	document.getElementById('globalAvg').textContent = avg + "/5";
             } else {
                 document.getElementById('globalAvg').textContent = r.message || "Could not save rating.";
             }
