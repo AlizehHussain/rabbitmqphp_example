@@ -82,7 +82,9 @@
 <script src="saveEvent.js"></script>
 
 <script>
-
+const token = sessionStorage.getItem('session_token');
+let clicked = false;
+let rating = 0;
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -126,41 +128,45 @@ async function checkLogin() {
 
 // Loads one event's details and shows them on the page
 async function loadEvent() {
-    const status = document.getElementById('status');
+	const status = document.getElementById('status');
+
 
 // Read the event ID from the address, e.g. event.php?id=whatevrabsbshaua
 const params = new URLSearchParams(window.location.search);
-const eventId = params.get('id');
+const eventID = params.get('id');
 // No ID in the address means there's nothing to show.
 // (The server checks the ID's format, so we only check that one exists.)
-    if (!eventId) {
+    if (!eventID) {
         status.textContent = "Event not found.";
         return;
     }
 
+
     try {
-// Get the list of upcoming events from get_events_handler.php
-// (the same list the home page shows). It's a GET request, so we send no data.
-        const response = await fetch("get_events_handler.php");
-        const data = await response.json();
-
-// If something went wrong on the server
-        if (!data.success) {
-            status.textContent = data.message || "Could not load event.";
-            return;
-        }
-
-// find() goes through the list and gives back the event whose ID
-// matches the one in the address (or undefined if none match)
-        const ev = data.events.find(function (e) {
-            return e.EventID === eventId;
+const data = await sendRequest("ID_handler.php", {
+	typeRequest: 'rateEvent',
+	eventID: eventID,
+	sessionToken: token,
+	clicked: clicked,
+	rating: rating
+		
         });
+var avg = 0;
+avg = Math.round(data.average*100)/100;
+if (Number.isNaN(avg)) {
+	document.getElementById('globalAvg').textContent = "No reviews yet";
+} else {
+document.getElementById('globalAvg').textContent = avg;
+}
 
-        if (!ev) {
-            status.textContent = "Event not found.";
+ // If the event doesn't exist, or something went wrong on the server
+        if (!data.success || !data.event) {
+            status.textContent = data.message || "Event not found.";
             return;
         }
-
+	
+	
+	const ev = data.event;
         // Put the event name in the browser tab
         document.title = ev.EventName;
 
@@ -171,25 +177,50 @@ const eventId = params.get('id');
         document.getElementById('venue').textContent = ev.Venue || "TBA";
         document.getElementById('city').textContent = ev.City || "TBA";
         document.getElementById('category').textContent = ev.Category || "Other";
-
-        // Only show the ticket link if it's a normal https web address
+	// Only show the ticket link if it's a normal https web address
         if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
             link.href = ev.TicketURL;
             link.hidden = false;
         }
 
+
+function rateEvent(eventID) {
+    document.querySelectorAll('.rating input').forEach(function (input) {
+	input.addEventListener('change', async function () {
+		clicked = true;
+            const r = await sendRequest("ID_handler.php", {
+                typeRequest: 'rateEvent',
+		sessionToken: token,
+		clicked: clicked,
+                eventID: eventID,
+                rating: input.value
+            });
+		if (r.success) {
+		var avg = Math.round(r.average*100)/100;
+        	document.getElementById('globalAvg').textContent = avg;
+            } else {
+                document.getElementById('globalAvg').textContent = r.message || "Could not save rating.";
+            }
+        });
+    });
+}
+	rateEvent(eventID);
+
+        
+
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
 	const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
-                   saveEvent(eventId, saveBtn, document.getElementById('saveMsg'));
+                   saveEvent(eventID, saveBtn, document.getElementById('saveMsg'));
         });
 
         // Hide "Loading..." and show the details
         status.hidden = true;
         document.getElementById('details').hidden = false;
     } catch (e) {
-        status.textContent = "Could not reach the server.";
+	console.error(e);
+        status.textContent = "Error:" + e.message;
     }
 }
 
