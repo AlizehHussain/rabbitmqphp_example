@@ -718,6 +718,212 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 	}
 }
 
+function doRespondHangout($sessionToken, $hangoutID, $response)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session"
+        ];
+    }
+
+    // get the user id and hangout id
+    $userID = (int) $result["user_id"];
+    $hangoutID = (int) $hangoutID;
+
+    // check if the response is allowed
+    $allowedResponses = ["accepted", "declined", "maybe"];
+
+    if (!in_array($response, $allowedResponses, true)) {
+        return [
+            "success" => false,
+            "message" => "Invalid response"
+        ];
+    }
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // check if the user is part of this hangout
+        $stmt = $connection->prepare(
+            "SELECT Response
+            FROM HangoutMembers
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("ii", $hangoutID, $userID);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the user is a member
+        if ($check->num_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "You're not part of this hangout"
+            ];
+        }
+
+        // get the current response
+        $row = $check->fetch_assoc();
+        $currentResponse = $row["Response"];
+
+        $stmt->close();
+
+        // check if the response is already the same
+        if ($currentResponse === $response) {
+            return [
+                "success" => true,
+                "message" => "Your response is already set to " . $response
+            ];
+        }
+
+        // update the user's response
+        $stmt = $connection->prepare(
+            "UPDATE HangoutMembers
+            SET Response = ?
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("sii", $response, $hangoutID, $userID);
+        $stmt->execute();
+
+        // check if the response was updated
+        if ($stmt->affected_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "Unable to update your response"
+            ];
+        }
+
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "Your response was updated successfully"
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Respond hangout error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to update your response"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
+function doGetHangoutMembers($sessionToken, $hangoutID)
+{
+    // check if the session is valid
+    $result = doValidate($sessionToken);
+
+    if (!is_array($result) || ($result["success"] ?? false) !== true) {
+        return [
+            "success" => false,
+            "message" => "Invalid session"
+        ];
+    }
+
+    // get the user id and hangout id
+    $userID = (int) $result["user_id"];
+    $hangoutID = (int) $hangoutID;
+
+    // connect to the database
+    $connection = getConnection();
+
+    try {
+
+        // check if the user is part of this hangout
+        $stmt = $connection->prepare(
+            "SELECT HangoutID
+            FROM HangoutMembers
+            WHERE HangoutID = ? AND MemberID = ?"
+        );
+
+        $stmt->bind_param("ii", $hangoutID, $userID);
+        $stmt->execute();
+
+        $check = $stmt->get_result();
+
+        // check if the user is a member
+        if ($check->num_rows === 0) {
+            $stmt->close();
+
+            return [
+                "success" => false,
+                "message" => "You're not part of this hangout"
+            ];
+        }
+
+        $stmt->close();
+
+        // get the usernames and responses of the members
+        $stmt = $connection->prepare(
+            "SELECT users.username, HangoutMembers.Response
+            FROM HangoutMembers
+            JOIN users
+                ON HangoutMembers.MemberID = users.uid
+            WHERE HangoutMembers.HangoutID = ?"
+        );
+
+        $stmt->bind_param("i", $hangoutID);
+        $stmt->execute();
+
+        // get the member information
+        $check = $stmt->get_result();
+
+        // create an empty list for the members
+        $members = [];
+
+        // go through each member and add them to the list
+        while ($row = $check->fetch_assoc()) {
+            $members[] = $row;
+        }
+
+        $stmt->close();
+
+        return [
+            "success" => true,
+            "message" => "Hangout members retrieved successfully",
+            "members" => $members
+        ];
+    }
+    catch (Throwable $e) {
+
+        // log the error
+        error_log("Get hangout members error: " . $e->getMessage());
+
+        return [
+            "success" => false,
+            "message" => "Unable to retrieve hangout members"
+
+        ];
+    }
+    finally {
+
+        // close the database connection
+        $connection->close();
+    }
+}
+
 function doGetHangouts($sessionToken){
     // get the user session token
     $result = doValidate($sessionToken);
@@ -2115,6 +2321,11 @@ function requestProcessor($request){
 				$request["invitee_usernames"] ?? []);
 			case "get_hangouts":
 				return doGetHangouts($request["session_token"] ?? "");
+			case "respond_hangouts":
+				return doRespondHangout($request["session_token"] ?? "", $request["hangout_id"] ?? "",
+				$request["response"] ?? "");
+			case "get_hangout_members":
+				return doGetHangoutMembers($request["session_token"] ?? "", $request["hangout_id"] ?? "");
 			case "get_events":
 				return doGetEvents();
 			case "suggest_event":

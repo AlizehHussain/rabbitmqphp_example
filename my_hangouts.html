@@ -13,20 +13,20 @@
 
     <script>
 
-        // Get the session token
+        // get the session token
         const session_token = sessionStorage.getItem("session_token");
 
-        // Get the HTML elements
+        // get the html elements
         const messagebox = document.getElementById("message");
         const hangoutList = document.getElementById("hangoutList");
 
-        // Check if the session token exists
+        // check if the session token exists
         if (!session_token) {
             messagebox.textContent = "Please log in first.";
         }
         else {
 
-            // Load the user's hangouts
+            // load the user's hangouts
             async function loadHangouts() {
                 try {
                     const response = await fetch("get_hangouts_handler.php", {
@@ -41,37 +41,74 @@
 
                     const data = await response.json();
 
-                    // Check if the hangouts loaded successfully
+                    // check if the hangouts loaded successfully
                     if (!data.success) {
                         messagebox.textContent = data.message || "Unable to load hangouts.";
                         return;
                     }
 
-                    // Check if the user has any hangouts
+                    // clear the old hangouts
+                    hangoutList.innerHTML = "";
+
+                    // check if the user has any hangouts
                     if (!data.hangouts || data.hangouts.length == 0) {
                         messagebox.textContent = "You have no hangouts yet.";
                         return;
                     }
 
-                    // Display each hangout
+                    // display each hangout
                     data.hangouts.forEach(hangout => {
 
-                        // Create a list item and link
+                        // create a list item and link
                         const li = document.createElement("li");
                         const link = document.createElement("a");
 
-                        // Open the suggestions page for this hangout
+                        // open the suggestions page for this hangout
                         link.href = "suggest_vote.html?hangout_id=" + hangout.HangoutID;
 
-                        // Display the hangout information
+                        // display the hangout information
                         link.textContent =
                             hangout.EventName + " - " +
                             hangout.EventDate + " - " +
                             hangout.Venue + " - " +
-                            hangout.CreatorName + " - " +
-                            hangout.Response;
+                            hangout.CreatorName;
 
                         li.appendChild(link);
+
+                        // display the user's response
+                        const currentResponse = document.createElement("span");
+                        currentResponse.textContent = " - Your response: " + hangout.Response;
+                        li.appendChild(currentResponse);
+
+                        // create the accept button
+                        const acceptButton = document.createElement("button");
+                        acceptButton.textContent = "Accept";
+                        acceptButton.type = "button";
+                        acceptButton.addEventListener("click", function() {
+                            respondHangout(hangout.HangoutID, "accepted");
+                        });
+
+                        // create the maybe button
+                        const maybeButton = document.createElement("button");
+                        maybeButton.textContent = "Maybe";
+                        maybeButton.type = "button";
+                        maybeButton.addEventListener("click", function() {
+                            respondHangout(hangout.HangoutID, "maybe");
+                        });
+
+                        // create the decline button
+                        const declineButton = document.createElement("button");
+                        declineButton.textContent = "Decline";
+                        declineButton.type = "button";
+                        declineButton.addEventListener("click", function() {
+                            respondHangout(hangout.HangoutID, "declined");
+                        });
+
+                        // add the buttons to the hangout
+                        li.appendChild(acceptButton);
+                        li.appendChild(maybeButton);
+                        li.appendChild(declineButton);
+
                         hangoutList.appendChild(li);
                     });
 
@@ -82,7 +119,40 @@
                 }
             }
 
-            // Load the hangouts when the page opens
+            // update the user's hangout response
+            async function respondHangout(hangoutID, hangoutResponse) {
+                try {
+                    const response = await fetch("respond_hangout_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            hangout_id: hangoutID,
+                            response: hangoutResponse
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // display the response message
+                    messagebox.textContent = data.message || "Unable to update your response.";
+
+                    // reload the hangouts if the response was updated
+                    if (data.success) {
+                        await loadHangouts();
+                        messagebox.textContent = data.message || "Your response was updated.";
+                    }
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to update your response.";
+                }
+            }
+
+            // load the hangouts when the page opens
             loadHangouts();
 
         }
@@ -97,5 +167,3 @@
 
 </body>
 </html>
-
-	
