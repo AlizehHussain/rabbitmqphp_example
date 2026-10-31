@@ -587,7 +587,7 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 
 	// check if user already created a hangout for this event
 	$stmt = $connection->prepare(
-		"SELECT HnagoutID
+		"SELECT HangoutID
 		FROM Hangouts
 		WHERE EventID = ? AND CreatedID = ?"
 	);
