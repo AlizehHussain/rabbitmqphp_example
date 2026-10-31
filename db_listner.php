@@ -2321,7 +2321,7 @@ function requestProcessor($request){
 				$request["invitee_usernames"] ?? []);
 			case "get_hangouts":
 				return doGetHangouts($request["session_token"] ?? "");
-			case "respond_hangouts":
+			case "respond_hangout":
 				return doRespondHangout($request["session_token"] ?? "", $request["hangout_id"] ?? "",
 				$request["response"] ?? "");
 			case "get_hangout_members":
