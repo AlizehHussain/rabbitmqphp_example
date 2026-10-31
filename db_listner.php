@@ -584,6 +584,27 @@ function doCreateHangout($sessionToken, $eventID, $inviteeUsernames)
 		"message" => "Event not found" 
 		]; 
 	}
+
+	// check if user already created a hangout for this event
+	$stmt = $connection->prepare(
+		"SELECT HnagoutID
+		FROM Hangouts
+		WHERE EventID = ? AND CreatedID = ?"
+	);
+	$stmt->bind_param("si", $eventID, $uid);
+	//execute the query
+	$stmt->execute();
+	/// get the result of the query
+	$stmt_result = $stmt->get_result();
+	//check if hangout exists
+	if($stmt_result->num_rows > 0) {
+		$stmt->close();
+		return [
+			"success" => false,
+			"message" => "Hangout already created for this event"
+		];
+	}
+	$stmt->close();
 	
 	//santize the incoming invitees usernames and make sure there is no whitespace
 	$inviteeUsernames = array_map('trim', $inviteeUsernames);
