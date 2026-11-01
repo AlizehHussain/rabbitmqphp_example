@@ -343,7 +343,7 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_results();
+		$result = $stmt->get_result();
 
 		$recommendations = [];
 
