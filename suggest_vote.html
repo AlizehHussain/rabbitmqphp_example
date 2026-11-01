@@ -7,6 +7,10 @@
 
     <h2>Suggest an Event</h2>
 
+    <!--show who is going-->
+    <h3>Who's going</h3>
+    <ul id="memberList"></ul>
+
     <form id="suggestForm">
         <label for="event_id">Choose an event:</label>
         <select id="event_id">
@@ -24,12 +28,12 @@
 
     <ul id="suggestionList"></ul>
 
-<!--Link to other pages-->
+<!--link to other pages-->
 <p>
     <a href="my_hangouts.html">My Hangouts</a> |
     <a href="home.php">Back to Home</a>
 </p>
-    
+   
 
     <script>
 
@@ -46,26 +50,79 @@
         const suggestForm = document.getElementById("suggestForm");
         //voting results
         const result = document.getElementById("result");
+        //list of members
+        const memberList = document.getElementById("memberList");
 
-        // Check if the session token and hangout ID exist
+        // check if the session token and hangout id exist
         if (!session_token || !hangoutID) {
             messagebox.textContent = "Missing session or hangout information.";
         }
         else {
 
-            // Load the events into the dropdown
+            // load the members for this hangout
+            async function loadMembers() {
+                try {
+                    const response = await fetch("get_hangout_members_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            hangout_id: hangoutID
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // check if the members loaded successfully
+                    if (!data.success) {
+                        messagebox.textContent = data.message || "Unable to load members.";
+                        return;
+                    }
+
+                    // clear the old members
+                    memberList.innerHTML = "";
+
+                    // check if there are any members
+                    if (!data.members || data.members.length == 0) {
+                        const li = document.createElement("li");
+                        li.textContent = "No members found.";
+                        memberList.appendChild(li);
+                        return;
+                    }
+
+                    // display each member
+                    data.members.forEach(member => {
+                        const li = document.createElement("li");
+
+                        li.textContent =
+                            member.username + " - " +
+                            (member.Response || "No response");
+
+                        memberList.appendChild(li);
+                    });
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to load members.";
+                }
+            }
+
+            // load the events into the dropdown
             async function loadEvents() {
                 try {
                     const response = await fetch("get_events_handler.php");
                     const data = await response.json();
 
-                    // Check if the events loaded successfully
+                    // check if the events loaded successfully
                     if (!data.success) {
                         messagebox.textContent = data.message || "Unable to load events.";
                         return;
                     }
 
-                    // Add the events to the dropdown
+                    // add the events to the dropdown
                     if (!data.events || data.events.length == 0) {
                         messagebox.textContent = "No events available.";
                         return;
@@ -85,7 +142,7 @@
                 }
             }
 
-            // Load the suggestions for this hangout
+            // load the suggestions for this hangout
             async function loadSuggestions() {
                 try {
                     const response = await fetch("get_suggestions_handler.php", {
@@ -101,60 +158,68 @@
 
                     const data = await response.json();
 
-                    // Check if the suggestions loaded successfully
+                    // check if the suggestions loaded successfully
                     if (!data.success) {
                         messagebox.textContent = data.message || "Unable to load suggestions.";
                         return;
                     }
 
-                    // Clear the old suggestions
+                    // clear the old suggestions
                     suggestionList.innerHTML = "";
-                    // lets find the highest vote count
-                    let winningVote = 0;
-                    // go through every suggestion to count votes for each event
-                    data.suggestions.forEach(function(suggestion) {
-                        // check if a specific suggestion has more votes than the event with the highest votes
-                        if (Number(suggestion.VoteCount) > winningVote) {
-                             winningVote = Number(suggestion.VoteCount);}
-                            });
-                            // check if votes are empty
-                            if (winningVote === 0) {
-                                result.textContent = "No one voted yet";
-                            }
-                            else {// two events could be winner so need array
-                                const winners = [];
-                                // go through each suggestion
-                                data.suggestions.forEach(function(suggestion) {
-                                    // check if the suggestion has the highest votes
-                                    if (Number(suggestion.VoteCount) === winningVote) {
-                                        winners.push(suggestion);
-                                    }
-                                });
-                                // get the names of the winnert
-                                const winnerNames = [];
-                                winners.forEach(function(suggestion) {
-                                    winnerNames.push(suggestion.EventName);
-                                });
-                                // display the winner or tie
-                                if (winners.length === 1) {
-                                    result.textContent =
-                                    "Winner: " + winnerNames[0] + " (" + winningVote + " votes)";
-                                }
-                                else {
-                                    result.textContent = "Tied: " + winnerNames.join(", ") + " (" + winningVote + " votes each)";
-                                 }
-                                }
 
-	
-                    // Check if there are any suggestions
+                    // check if there are any suggestions
                     if (!data.suggestions || data.suggestions.length == 0) {
+                        result.textContent = "No one voted yet";
                         const li = document.createElement("li");
                         li.textContent = "No suggestions yet.";
                         suggestionList.appendChild(li);
                         return;
                     }
 
-                    // Display each suggestion
+                    // lets find the highest vote count
+                    let winningVote = 0;
+
+                    // go through every suggestion to count votes for each event
+                    data.suggestions.forEach(function(suggestion) {
+                        // check if a specific suggestion has more votes than the event with the highest votes
+                        if (Number(suggestion.VoteCount) > winningVote) {
+                            winningVote = Number(suggestion.VoteCount);
+                        }
+                    });
+
+                    // check if votes are empty
+                    if (winningVote === 0) {
+                        result.textContent = "No one voted yet";
+                    }
+                    else {
+                        // two events could be winner so need array
+                        const winners = [];
+
+                        // go through each suggestion
+                        data.suggestions.forEach(function(suggestion) {
+                            // check if the suggestion has the highest votes
+                            if (Number(suggestion.VoteCount) === winningVote) {
+                                winners.push(suggestion);
+                            }
+                        });
+
+                        // get the names of the winners
+                        const winnerNames = [];
+                        winners.forEach(function(suggestion) {
+                            winnerNames.push(suggestion.EventName);
+                        });
+
+                        // display the winner or tie
+                        if (winners.length === 1) {
+                            result.textContent =
+                                "Winner: " + winnerNames[0] + " (" + winningVote + " votes)";
+                        }
+                        else {
+                            result.textContent = "Tied: " + winnerNames.join(", ") + " (" + winningVote + " votes each)";
+                        }
+                    }
+
+                    // display each suggestion
                     data.suggestions.forEach(suggestion => {
                         const li = document.createElement("li");
 
@@ -164,12 +229,12 @@
                             suggestion.Venue + " - Votes: " +
                             suggestion.VoteCount + " ";
 
-                        // Create the vote button
+                        // create the vote button
                         const button = document.createElement("button");
                         button.type = "button";
                         button.dataset.suggestionId = suggestion.HangoutSuggestionID;
 
-                        // Check if the user already voted
+                        // check if the user already voted
                         if (Number(suggestion.UserVoted) === 1) {
                             button.textContent = "Voted";
                             button.disabled = true;
@@ -177,7 +242,7 @@
                         else {
                             button.textContent = "Vote";
 
-                            // Send the vote when the button is clicked
+                            // send the vote when the button is clicked
                             button.addEventListener("click", function() {
                                 sendVote(button.dataset.suggestionId, button);
                             });
@@ -194,10 +259,10 @@
                 }
             }
 
-            // Send a vote for a suggestion
+            // send a vote for a suggestion
             async function sendVote(suggestionID, button) {
 
-                // Disable the button while the vote is being sent
+                // disable the button while the vote is being sent
                 button.disabled = true;
 
                 try {
@@ -214,10 +279,10 @@
 
                     const data = await response.json();
 
-                    // Display the response message
+                    // display the response message
                     messagebox.textContent = data.message || "Unable to submit vote.";
 
-                    // Reload the suggestions if the vote was successful
+                    // reload the suggestions if the vote was successful
                     if (data.success) {
                         await loadSuggestions();
                     }
@@ -233,16 +298,16 @@
                 }
             }
 
-            // Submit a new event suggestion
+            // submit a new event suggestion
             suggestForm.addEventListener("submit", async function(e) {
 
-                // Stop the page from refreshing
+                // stop the page from refreshing
                 e.preventDefault();
 
-                // Get the selected event
+                // get the selected event
                 const eventID = eventDropdown.value;
 
-                // Check if an event was selected
+                // check if an event was selected
                 if (eventID === "") {
                     messagebox.textContent = "Please select an event.";
                     return;
@@ -263,10 +328,10 @@
 
                     const data = await response.json();
 
-                    // Display the response message
+                    // display the response message
                     messagebox.textContent = data.message || "Unable to suggest event.";
 
-                    // Reload the suggestions if the event was added
+                    // reload the suggestions if the event was added
                     if (data.success) {
                         await loadSuggestions();
                     }
@@ -278,8 +343,9 @@
                 }
             });
 
-            // Load the events and suggestions when the page opens
+            // load the events, members and suggestions when the page opens
             loadEvents();
+            loadMembers();
             loadSuggestions();
 
         }
