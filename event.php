@@ -73,9 +73,21 @@
  <!-- The ticket link is only shown if the event has a valid web address -->
         <p><a id="ticketLink" hidden>Buy tickets on Ticketmaster</a></p>
  <!-- The Save button, with a spot next to it for error messages -->
-
         <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
+
 </div>
+<div>
+<form id="review-form"> 
+  <textarea id= "comment" name="comment" placeholder="Your review" required></textarea>
+  <button type="submit" id="reviewBtn">Submit</button>
+  <p id="review-status"></p>
+</form>
+</div>
+
+<h2>Reviews</h2>
+<div id="reviews-list">
+</div>
+
 </div>
 
 <!-- Loads the shared Save button code we made -->
@@ -85,6 +97,17 @@
 const token = sessionStorage.getItem('session_token');
 let clicked = false;
 let rating = 0;
+const form = document.getElementById('review-form');
+const list = document.getElementById('reviews-list');
+function addReview(r) {
+	const p = document.createElement('p');
+	const name = document.createElement('strong')
+	name.textContent = r.username + ' said this ';
+	p.append(name, r. comment)
+	list.appendChild(p);
+
+}
+
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -159,6 +182,16 @@ if (Number.isNaN(avg)) {
 document.getElementById('globalAvg').textContent = avg + "/5";
 }
 
+async function loadReviews(){
+	const res = await fetch(`getReviews.php?event_id=${encodeURIComponent(eventID)}`);
+	const data = await res.json();
+	if (!data.success) return;
+	list.innerHTML='';
+	data.reviews.forEach(addReview);
+}
+
+loadReviews();
+
  // If the event doesn't exist, or something went wrong on the server
         if (!data.success || !data.event) {
             status.textContent = data.message || "Event not found.";
@@ -184,7 +217,6 @@ document.getElementById('globalAvg').textContent = avg + "/5";
             link.hidden = false;
         }
 
-
 function rateEvent(eventID) {
     document.querySelectorAll('.rating input').forEach(function (input) {
 	input.addEventListener('change', async function () {
@@ -205,12 +237,29 @@ function rateEvent(eventID) {
         });
     });
 }
-	rateEvent(eventID);
+
+form.addEventListener('submit', async (e) => {
+e.preventDefault();
+const comment = document.getElementById('comment').value.trim();
+const r = await sendRequest("review_handler.php", {
+		sessionToken: token,
+		eventID: eventID,
+                review: comment
+            });
+		if (r.success) {
+			loadReviews();
+		       form.reset();	
+		} else {
+                document.getElementById('review-status').textContent = r.message || "Could not save rating.";
+}
+});
+
+rateEvent(eventID);
 
         
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
-	const saveBtn = document.getElementById('saveBtn');
+const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
                    saveEvent(eventID, saveBtn, document.getElementById('saveMsg'));
         });

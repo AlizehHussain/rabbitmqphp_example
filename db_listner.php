@@ -2280,6 +2280,63 @@ function doRateEvent($eventID, $sessionToken, $clicked, $rating){
 	}
 }
 
+function doGetReviews($eventID) {
+	$connection = getConnection();
+	try {	
+	$stmt = $connection->prepare("SELECT users.username AS username, Reviews.Comment AS comment 
+	FROM Reviews
+	JOIN users ON users.uid = Reviews.uid
+	WHERE Reviews.EventID = ?
+	ORDER BY Reviews.CreatedAt DESC
+	LIMIT 50");
+	$stmt->bind_param("s", $eventID);
+	$stmt->execute();
+	$result=$stmt->get_result();
+	$reviews = [];
+	while ($review = $result->fetch_assoc()){
+		$reviews[] = $review;
+	}
+
+	$stmt->close();
+	
+	return [
+		"success" => true,
+		"reviews" => $reviews
+	];
+	} catch (Throwable $e) {
+		error_log("Get reviews error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve reviews"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+function doSaveReview($token, $comment, $eventID){
+	$validation = doValidate($token);
+	if (($validation["success"] ?? false) !== true){
+		return ["success" => false, "message" => "Invalid session"];
+	}
+	$connection = getConnection();
+	$userID = (int) $validation["user_id"];
+	$comment = trim($comment);
+
+	try {
+		$stmt = $connection->prepare(
+			"INSERT INTO Reviews (uid, EventID, Comment) VALUES (?, ?, ?)");
+		$stmt->bind_param("iss", $userID, $eventID, $comment);
+		$stmt->execute();
+		$stmt->close();
+
+		return ["success" => true];
+	} catch (Throwable $e){
+		error_log("Save review error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to save review"];
+	} finally {
+	 $connection->close();
+	}
+}
 
 function requestProcessor($request){
 	//check if we got a good request type
@@ -2309,9 +2366,13 @@ function requestProcessor($request){
 			case "validate_session":
 				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "logout":
-				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
+			return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "sync_events":
 				return doSyncEvents($request["events"] ?? []);
+			case "get_reviews":
+				return doGetReviews($request["event_id"]);
+			case "save_review":
+				return doSaveReview($request["token"], $request["comment"], $request["event_id"]);
 			case "get_recommendations":
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
