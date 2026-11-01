@@ -2,7 +2,7 @@
 
 //literally just copied save_pick, only difference is that it only requires session token and not event id
 
-headder("Content-Type: application/json");
+header("Content-Type: application/json");
 
 //For joseph to load rabbitmq dependencies
 
