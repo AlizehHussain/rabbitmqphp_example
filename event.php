@@ -67,7 +67,7 @@
 </div>
 <p><strong>Global Rating: </strong><span id="globalAvg">...</span></p>
         <p><strong>Date:</strong> <span id="date"></span></p>
-        <p><strong>Venue:</strong> <span id="venue"></span></p>
+        <p><strong>Venue:</strong> <a id="venue"></a></p>
         <p><strong>City:</strong> <span id="city"></span></p>
         <p><strong>Category:</strong> <span id="category"></span></p>
  <!-- The ticket link is only shown if the event has a valid web address -->
@@ -75,7 +75,6 @@
  <!-- The Save button, with a spot next to it for error messages -->
         <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
 
-</div>
 <div>
 <form id="review-form"> 
   <textarea id= "comment" name="comment" placeholder="Your review" required></textarea>
@@ -88,6 +87,7 @@
 <div id="reviews-list">
 </div>
 
+</div>
 </div>
 
 <!-- Loads the shared Save button code we made -->
@@ -200,18 +200,23 @@ loadReviews();
 	
 	
 	const ev = data.event;
+	
         // Put the event name in the browser tab
         document.title = ev.EventName;
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
         document.getElementById('name').textContent = ev.EventName;
-        document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+	document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+	const v = document.getElementById('venue');
+	v.textContent = ev.Venue || "TBA";
+	if (ev.Venue && ev.City) v.href = 'venue.php?venue=' + encodeURIComponent(ev.Venue) + '&city=' + encodeURIComponent(ev.City); 	
         document.getElementById('venue').textContent = ev.Venue || "TBA";
         document.getElementById('city').textContent = ev.City || "TBA";
         document.getElementById('category').textContent = ev.Category || "Other";
 	// Only show the ticket link if it's a normal https web address
-        if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
+	
+	if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
             link.href = ev.TicketURL;
             link.hidden = false;
