@@ -343,7 +343,7 @@ function doGetRec($sessionToken){
 		$stmt->bind_param("i", $userID);
 		$stmt->execute();
 
-		$result = $stmt->get_results();
+		$result = $stmt->get_result();
 
 		$recommendations = [];
 
@@ -2280,7 +2280,197 @@ function doRateEvent($eventID, $sessionToken, $clicked, $rating){
 	}
 }
 
+function doGetReviews($eventID) {
+	$connection = getConnection();
+	try {	
+	$stmt = $connection->prepare("SELECT users.username AS username, Reviews.Comment AS comment 
+	FROM Reviews
+	JOIN users ON users.uid = Reviews.uid
+	WHERE Reviews.EventID = ?
+	ORDER BY Reviews.CreatedAt DESC
+	LIMIT 50");
+	$stmt->bind_param("s", $eventID);
+	$stmt->execute();
+	$result=$stmt->get_result();
+	$reviews = [];
+	while ($review = $result->fetch_assoc()){
+		$reviews[] = $review;
+	}
 
+	$stmt->close();
+	
+	return [
+		"success" => true,
+		"reviews" => $reviews
+	];
+	} catch (Throwable $e) {
+		error_log("Get reviews error: " . $e->getMessage());
+		return [
+			"success" => false,
+			"message" => "Unable to retrieve reviews"
+		];
+	} finally {
+		$connection->close();
+	}
+}
+function doSaveReview($token, $comment, $eventID){
+	$validation = doValidate($token);
+	if (($validation["success"] ?? false) !== true){
+		return ["success" => false, "message" => "Invalid session"];
+	}
+	$connection = getConnection();
+	$userID = (int) $validation["user_id"];
+	$comment = trim($comment);
+
+	try {
+		$stmt = $connection->prepare(
+			"INSERT INTO Reviews (uid, EventID, Comment) VALUES (?, ?, ?)");
+		$stmt->bind_param("iss", $userID, $eventID, $comment);
+		$stmt->execute();
+		$stmt->close();
+
+		return ["success" => true];
+	} catch (Throwable $e){
+		error_log("Save review error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to save review"];
+	} finally {
+	 $connection->close();
+	}
+}
+
+function doRateVenue($venue, $city, $sessionToken, $clicked, $rating){
+	$venue = trim($venue);
+	$city  = trim($city);
+
+	if ($venue === ""){
+		return ["success" => false, "message" => "Venue required"];
+	}
+
+	$userID = 0;
+
+	if ($clicked){
+		$validation = doValidate($sessionToken);
+		if (($validation["success"] ?? false) !== true){
+			return ["success" => false, "message" => "Invalid session"];
+		}
+
+		$userID = (int) $validation["user_id"];
+		$rating = (int) $rating;
+
+		if ($rating < 1 || $rating > 5){
+			return ["success" => false, "message" => "Invalid rating"];
+		}
+	}
+
+	$connection = getConnection();
+
+	try {
+		if ($clicked){
+			// one rating per user per venue; clicking again updates it
+			$stmt = $connection->prepare(
+				"INSERT INTO VenueRatings (Venue, City, UserID, Rating)
+				 VALUES (?, ?, ?, ?)
+				 ON DUPLICATE KEY UPDATE Rating = VALUES(Rating)"
+			);
+			$stmt->bind_param("ssii", $venue, $city, $userID, $rating);
+			$stmt->execute();
+			$stmt->close();
+		}
+
+		$stmt = $connection->prepare(
+			"SELECT AVG(Rating) AS average, COUNT(*) AS total
+			 FROM VenueRatings
+			 WHERE Venue = ? AND City = ?"
+		);
+		$stmt->bind_param("ss", $venue, $city);
+		$stmt->execute();
+		$row = $stmt->get_result()->fetch_assoc();
+		$stmt->close();
+
+		$response = ["success" => true];
+
+		if ((int) $row["total"] > 0){
+			$response["average"] = (float) $row["average"];
+		}
+
+		return $response;
+	} catch (Throwable $e){
+		error_log("Rate venue error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to save rating"];
+	} finally {
+		$connection->close();
+	}
+}
+
+// Returns the username + comment for each review of one venue.
+function doGetVenueReviews($venue, $city){
+	$connection = getConnection();
+
+	try {
+		$stmt = $connection->prepare(
+			"SELECT users.username AS username, VenueReviews.Comment AS comment
+			 FROM VenueReviews
+			 JOIN users ON users.uid = VenueReviews.uid
+			 WHERE VenueReviews.Venue = ? AND VenueReviews.City = ?
+			 ORDER BY VenueReviews.CreatedAt DESC
+			 LIMIT 50"
+		);
+		$stmt->bind_param("ss", $venue, $city);
+		$stmt->execute();
+		$result = $stmt->get_result();
+
+		$reviews = [];
+		while ($review = $result->fetch_assoc()){
+			$reviews[] = $review;
+		}
+
+		$stmt->close();
+
+		return [
+			"success" => true,
+			"reviews" => $reviews
+		];
+	} catch (Throwable $e){
+		error_log("Get venue reviews error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to retrieve reviews"];
+	} finally {
+		$connection->close();
+	}
+}
+
+function doSaveVenueReview($token, $comment, $venue, $city){
+	$validation = doValidate($token);
+	if (($validation["success"] ?? false) !== true){
+		return ["success" => false, "message" => "Invalid session"];
+	}
+
+	$comment = trim($comment);
+	$venue   = trim($venue);
+	$city    = trim($city);
+
+	if ($comment === "" || $venue === ""){
+		return ["success" => false, "message" => "Comment and venue required"];
+	}
+
+	$userID = (int) $validation["user_id"];
+	$connection = getConnection();
+
+	try {
+		$stmt = $connection->prepare(
+			"INSERT INTO VenueReviews (uid, Venue, City, Comment) VALUES (?, ?, ?, ?)"
+		);
+		$stmt->bind_param("isss", $userID, $venue, $city, $comment);
+		$stmt->execute();
+		$stmt->close();
+
+		return ["success" => true];
+	} catch (Throwable $e){
+		error_log("Save venue review error: " . $e->getMessage());
+		return ["success" => false, "message" => "Unable to save review"];
+	} finally {
+		$connection->close();
+	}
+}
 function requestProcessor($request){
 	//check if we got a good request type
 	if (!is_array($request) || !isset($request["type"])){
@@ -2309,9 +2499,13 @@ function requestProcessor($request){
 			case "validate_session":
 				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "logout":
-				return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
+			return doLogout($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "sync_events":
 				return doSyncEvents($request["events"] ?? []);
+			case "get_reviews":
+				return doGetReviews($request["event_id"]);
+			case "save_review":
+				return doSaveReview($request["token"], $request["comment"], $request["event_id"]);
 			case "get_recommendations":
 				return doGetRec($request["session_token"] ?? "");
 			case "save_pick":
@@ -2321,7 +2515,7 @@ function requestProcessor($request){
 				$request["invitee_usernames"] ?? []);
 			case "get_hangouts":
 				return doGetHangouts($request["session_token"] ?? "");
-			case "respond_hangouts":
+			case "respond_hangout":
 				return doRespondHangout($request["session_token"] ?? "", $request["hangout_id"] ?? "",
 				$request["response"] ?? "");
 			case "get_hangout_members":
@@ -2349,6 +2543,12 @@ function requestProcessor($request){
 				return doGetGroups($request["session_token"] ?? "");
 			case "create_invite":
 				return doCreateInvite($request["session_token"] ?? "", $request["group_id"] ?? "");
+			case "rateVenue":
+				return doRateVenue($request["venue"] ?? "", $request["city"] ?? "", $request["sessionToken"] ?? "", $request["clicked"] ?? false, $request["rating"] ?? 0);
+			case "get_venue_reviews":
+				return doGetVenueReviews($request["venue"] ?? "", $request["city"] ?? "");
+			case "save_venue_review":
+				return doSaveVenueReview($request["token"] ?? "", $request["comment"] ?? "", $request["venue"] ?? "", $request["city"] ?? "");
 			case "join_group":
 				return doJoinGroup($request["session_token"] ?? "", $request["invite_token"] ?? "");
 			case"get_group_members":

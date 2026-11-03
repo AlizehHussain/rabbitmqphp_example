@@ -67,14 +67,26 @@
 </div>
 <p><strong>Global Rating: </strong><span id="globalAvg">...</span></p>
         <p><strong>Date:</strong> <span id="date"></span></p>
-        <p><strong>Venue:</strong> <span id="venue"></span></p>
+        <p><strong>Venue:</strong> <a id="venue"></a></p>
         <p><strong>City:</strong> <span id="city"></span></p>
         <p><strong>Category:</strong> <span id="category"></span></p>
  <!-- The ticket link is only shown if the event has a valid web address -->
         <p><a id="ticketLink" hidden>Buy tickets on Ticketmaster</a></p>
  <!-- The Save button, with a spot next to it for error messages -->
-
         <p><button id="saveBtn">Save Event</button><span id="saveMsg"></span></p>
+
+<div>
+<form id="review-form"> 
+  <textarea id= "comment" name="comment" placeholder="Your review" required></textarea>
+  <button type="submit" id="reviewBtn">Submit</button>
+  <p id="review-status"></p>
+</form>
+</div>
+
+<h2>Reviews</h2>
+<div id="reviews-list">
+</div>
+
 </div>
 </div>
 
@@ -85,6 +97,17 @@
 const token = sessionStorage.getItem('session_token');
 let clicked = false;
 let rating = 0;
+const form = document.getElementById('review-form');
+const list = document.getElementById('reviews-list');
+function addReview(r) {
+	const p = document.createElement('p');
+	const name = document.createElement('strong')
+	name.textContent = r.username + ' said this ';
+	p.append(name, r. comment)
+	list.appendChild(p);
+
+}
+
 // Sends data to one of our PHP files and returns the PHP file's answer
 async function sendRequest(url, data) {
     const response = await fetch(url, {
@@ -159,6 +182,16 @@ if (Number.isNaN(avg)) {
 document.getElementById('globalAvg').textContent = avg + "/5";
 }
 
+async function loadReviews(){
+	const res = await fetch(`getReviews.php?event_id=${encodeURIComponent(eventID)}`);
+	const data = await res.json();
+	if (!data.success) return;
+	list.innerHTML='';
+	data.reviews.forEach(addReview);
+}
+
+loadReviews();
+
  // If the event doesn't exist, or something went wrong on the server
         if (!data.success || !data.event) {
             status.textContent = data.message || "Event not found.";
@@ -167,23 +200,27 @@ document.getElementById('globalAvg').textContent = avg + "/5";
 	
 	
 	const ev = data.event;
+	
         // Put the event name in the browser tab
         document.title = ev.EventName;
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
         document.getElementById('name').textContent = ev.EventName;
-        document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+	document.getElementById('date').textContent = ev.EventDate || "Date TBA";
+	const v = document.getElementById('venue');
+	v.textContent = ev.Venue || "TBA";
+	if (ev.Venue && ev.City) v.href = 'venue.php?venue=' + encodeURIComponent(ev.Venue) + '&city=' + encodeURIComponent(ev.City); 	
         document.getElementById('venue').textContent = ev.Venue || "TBA";
         document.getElementById('city').textContent = ev.City || "TBA";
         document.getElementById('category').textContent = ev.Category || "Other";
 	// Only show the ticket link if it's a normal https web address
-        if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
+	
+	if (ev.TicketURL && ev.TicketURL.startsWith("https://")) {
             const link = document.getElementById('ticketLink');
             link.href = ev.TicketURL;
             link.hidden = false;
         }
-
 
 function rateEvent(eventID) {
     document.querySelectorAll('.rating input').forEach(function (input) {
@@ -205,12 +242,29 @@ function rateEvent(eventID) {
         });
     });
 }
-	rateEvent(eventID);
+
+form.addEventListener('submit', async (e) => {
+e.preventDefault();
+const comment = document.getElementById('comment').value.trim();
+const r = await sendRequest("review_handler.php", {
+		sessionToken: token,
+		eventID: eventID,
+                review: comment
+            });
+		if (r.success) {
+			loadReviews();
+		       form.reset();	
+		} else {
+                document.getElementById('review-status').textContent = r.message || "Could not save rating.";
+}
+});
+
+rateEvent(eventID);
 
         
 
         // Connect the Save button to this event (saveEvent is in saveEvent.js)
-	const saveBtn = document.getElementById('saveBtn');
+const saveBtn = document.getElementById('saveBtn');
 	saveBtn.addEventListener('click', function () {
                    saveEvent(eventID, saveBtn, document.getElementById('saveMsg'));
         });
