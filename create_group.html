@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Group</title>
+</head>
+<body>
+
+    <h1>Create a Group</h1>
+
+    <form id="create_group_form">
+        <label for="group_name">Group Name:</label>
+        <input type="text" id="group_name" name="group_name">
+
+        <button type="submit">Create</button>
+    </form>
+
+    <p id="message"></p>
+
+    <button id="invite_button" style="display: none;">Create invite link</button>
+
+    <p id="invite"></p>
+
+    <nav>
+        <a href="home.php">Home</a>
+        <a href="my_groups.html">My Groups</a>
+    </nav>
+
+    <script>
+        // get the session token
+        const session_token = sessionStorage.getItem("session_token");
+
+        const form = document.getElementById("create_group_form");
+        const groupName = document.getElementById("group_name");
+        const message = document.getElementById("message");
+        const inviteButton = document.getElementById("invite_button");
+        const invite = document.getElementById("invite");
+
+        let groupID = "";
+
+        // check if the user is logged in
+        if (!session_token) {
+            message.textContent = "Please log in first";
+            form.style.display = "none";
+        }
+
+        // create a group
+        form.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            // get the group name
+            const name = groupName.value.trim();
+
+            // check if the group name is empty
+            if (name === "") {
+                message.textContent = "Please enter a group name";
+                return;
+            }
+
+            try {
+                // send the group information
+                const response = await fetch("create_group_handler.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        session_token: session_token,
+                        group_name: name
+                    })
+                });
+
+                const data = await response.json();
+
+                // show the result
+                message.textContent = data.message || "Unable to create group";
+
+                // check if the group was created
+                if (data.success === true) {
+                    groupID = data.group_id;
+                    inviteButton.style.display = "inline-block";
+                }
+            }
+            catch (error) {
+                message.textContent = "Unable to create group";
+                console.error("Create group error:", error);
+            }
+        });
+
+        // create an invite link
+        inviteButton.addEventListener("click", async function() {
+            try {
+                // send the group id to create an invite
+                const response = await fetch("create_invite_handler.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        session_token: session_token,
+                        group_id: groupID
+                    })
+                });
+
+                const data = await response.json();
+
+                // show the result
+                message.textContent = data.message || "Unable to create invite link";
+
+                // check if the invite was created
+                if (data.success === true) {
+                    // build the invite link using the current page location
+                    const folder = window.location.pathname.substring(
+                        0,
+                        window.location.pathname.lastIndexOf("/") + 1
+                    );
+
+                    const inviteLink = window.location.origin + folder +
+                        "join_group.html?token=" + encodeURIComponent(data.invite_token);
+
+                    // show the invite link
+                    invite.textContent = inviteLink;
+                }
+            }
+            catch (error) {
+                message.textContent = "Unable to create invite link";
+                console.error("Create invite error:", error);
+            }
+        });
+    </script>
+
+</body>
+</html>

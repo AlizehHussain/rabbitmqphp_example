@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Join Group</title>
+</head>
+<body>
+
+    <h1>Join Group</h1>
+
+    <p id="message"></p>
+
+    <a href="home.php">Home</a>
+
+    <script>
+        // get the invite token from the url
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+
+        const message = document.getElementById("message");
+
+        // check if the invite token is missing
+        if (!token) {
+            message.textContent = "Missing invite link";
+        }
+        else {
+            // get the session token
+            const session_token = sessionStorage.getItem("session_token");
+
+            // check if the user is logged in
+            if (!session_token) {
+                // save the invite for after login
+                sessionStorage.setItem("pending_invite", token);
+
+                // show a link to the login page
+                message.textContent = "Please log in to join this group. ";
+
+                const loginLink = document.createElement("a");
+                loginLink.href = "login.php";
+                loginLink.textContent = "Log in";
+                message.appendChild(loginLink);
+            }
+            else {
+                // join the group
+                async function joinGroup() {
+                    try {
+                        // send the invite token
+                        const response = await fetch("join_group_handler.php", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                session_token: session_token,
+                                invite_token: token
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        // show the result
+                        message.textContent = data.message || "Unable to join group";
+
+                        // add a home link if successful
+                        if (data.success === true) {
+                            const homeLink = document.createElement("a");
+                            homeLink.href = "home.php";
+                            homeLink.textContent = "Go to Home";
+                            message.appendChild(document.createTextNode(" "));
+                            message.appendChild(homeLink);
+                        }
+                    }
+                    catch (error) {
+                        message.textContent = "Unable to join group";
+                        console.error("Join group error:", error);
+                    }
+                }
+
+                // run the join request
+                joinGroup();
+            }
+        }
+    </script>
+
+</body>
+</html>

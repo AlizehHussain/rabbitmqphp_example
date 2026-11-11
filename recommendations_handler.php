@@ -1,5 +1,5 @@
 <?php
-//this file allows users to retrieve recommendedations based on events they've saved
+
 //literally just copied save_pick, only difference is that it only requires session token and not event id
 
 header("Content-Type: application/json");

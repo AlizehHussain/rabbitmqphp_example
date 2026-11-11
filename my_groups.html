@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Groups</title>
+</head>
+<body>
+
+    <h1>My Groups</h1>
+
+    <p id="message"></p>
+
+    <ul id="groupList"></ul>
+
+    <nav>
+        <a href="create_group.html">Create Group</a>
+        <a href="home.php">Home</a>
+    </nav>
+
+    <script>
+        // get the session token
+        const session_token = sessionStorage.getItem("session_token");
+
+        const message = document.getElementById("message");
+        const groupList = document.getElementById("groupList");
+
+        // check if the user is logged in
+        if (!session_token) {
+            message.textContent = "Please log in first";
+        }
+        else {
+            // load the user's groups
+            async function loadGroups() {
+                try {
+                    // get the groups from the server
+                    const response = await fetch("get_groups_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // check if the groups were retrieved
+                    if (data.success !== true) {
+                        message.textContent = data.message || "Unable to retrieve groups";
+                        return;
+                    }
+
+                    // check if the user has any groups
+                    if (!data.groups || data.groups.length === 0) {
+                        message.textContent = "You have no groups yet.";
+                        return;
+                    }
+
+                    // clear the group list
+                    groupList.textContent = "";
+                    message.textContent = "";
+
+                    // go through each group
+                    data.groups.forEach(function(group) {
+                        // create the group list item
+                        const listItem = document.createElement("li");
+                        const groupName = document.createElement("span");
+
+                        groupName.textContent = group.GroupName + " ";
+                        listItem.appendChild(groupName);
+
+                        // create the members button
+                        const membersButton = document.createElement("button");
+                        membersButton.textContent = "Members";
+
+                        listItem.appendChild(membersButton);
+
+                        // create a list for the members
+                        const memberList = document.createElement("ul");
+                        listItem.appendChild(memberList);
+
+                        // load the group members when clicked
+                        membersButton.addEventListener("click", async function() {
+                            try {
+                                // get the group members
+                                const memberResponse = await fetch("get_group_members_handler.php", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        session_token: session_token,
+                                        group_id: group.GroupID
+                                    })
+                                });
+
+                                const memberData = await memberResponse.json();
+
+                                // clear the old members
+                                memberList.textContent = "";
+
+                                // check if the members were retrieved
+                                if (memberData.success !== true) {
+                                    message.textContent = memberData.message || "Unable to retrieve group members";
+                                    return;
+                                }
+
+                                // show the usernames
+                                memberData.members.forEach(function(member) {
+                                    const memberItem = document.createElement("li");
+                                    memberItem.textContent = member.username;
+                                    memberList.appendChild(memberItem);
+                                });
+
+                                message.textContent = "";
+                            }
+                            catch (error) {
+                                message.textContent = "Unable to retrieve group members";
+                                console.error("Get group members error:", error);
+                            }
+                        });
+
+                        // create the invite button
+                        const inviteButton = document.createElement("button");
+                        inviteButton.textContent = "Create invite link";
+
+                        listItem.appendChild(inviteButton);
+
+                        // create a place to show the invite link
+                        const inviteText = document.createElement("p");
+                        listItem.appendChild(inviteText);
+
+                        // create an invite link when clicked
+                        inviteButton.addEventListener("click", async function() {
+                            try {
+                                // create an invite for this group
+                                const inviteResponse = await fetch("create_invite_handler.php", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        session_token: session_token,
+                                        group_id: group.GroupID
+                                    })
+                                });
+
+                                const inviteData = await inviteResponse.json();
+
+                                // check if the invite was created
+                                if (inviteData.success !== true) {
+                                    message.textContent = inviteData.message || "Unable to create invite link";
+                                    return;
+                                }
+
+                                // build the invite link using the current page location
+                                const folder = window.location.pathname.substring(
+                                    0,
+                                    window.location.pathname.lastIndexOf("/") + 1
+                                );
+
+                                const inviteLink = window.location.origin + folder +
+                                    "join_group.html?token=" + encodeURIComponent(inviteData.invite_token);
+
+                                // show the invite link
+                                inviteText.textContent = inviteLink;
+                                message.textContent = "";
+                            }
+                            catch (error) {
+                                message.textContent = "Unable to create invite link";
+                                console.error("Create invite error:", error);
+                            }
+                        });
+
+                        // add the group to the page
+                        groupList.appendChild(listItem);
+                    });
+                }
+                catch (error) {
+                    message.textContent = "Unable to retrieve groups";
+                    console.error("Get groups error:", error);
+                }
+            }
+
+            // load groups when the page opens
+            loadGroups();
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Suggest and Vote</title>
+</head>
+<body>
+
+    <h2>Suggest an Event</h2>
+
+    <!--show who is going-->
+    <h3>Who's going</h3>
+    <ul id="memberList"></ul>
+
+    <form id="suggestForm">
+        <label for="event_id">Choose an event:</label>
+        <select id="event_id">
+            <option value="">Select an event</option>
+        </select>
+
+        <button type="submit">Suggest</button>
+    </form>
+
+    <p id="message"></p>
+
+    <h3>Suggestions</h3>
+    <!--adding results para-->
+    <p id="result"></p>
+
+    <ul id="suggestionList"></ul>
+
+<!--link to other pages-->
+<p>
+    <a href="my_hangouts.html">My Hangouts</a> |
+    <a href="home.php">Back to Home</a>
+</p>
+   
+
+    <script>
+
+        // get the token and hangoutid
+        const session_token = sessionStorage.getItem("session_token");
+        const hangoutID = new URLSearchParams(window.location.search).get("hangout_id");
+
+        // get the elements
+        const messagebox = document.getElementById("message");
+        //event id
+        const eventDropdown = document.getElementById("event_id");
+        //list of suggestions
+        const suggestionList = document.getElementById("suggestionList");
+        const suggestForm = document.getElementById("suggestForm");
+        //voting results
+        const result = document.getElementById("result");
+        //list of members
+        const memberList = document.getElementById("memberList");
+
+        // check if the session token and hangout id exist
+        if (!session_token || !hangoutID) {
+            messagebox.textContent = "Missing session or hangout information.";
+        }
+        else {
+
+            // load the members for this hangout
+            async function loadMembers() {
+                try {
+                    const response = await fetch("get_hangout_members_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            hangout_id: hangoutID
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // check if the members loaded successfully
+                    if (!data.success) {
+                        messagebox.textContent = data.message || "Unable to load members.";
+                        return;
+                    }
+
+                    // clear the old members
+                    memberList.innerHTML = "";
+
+                    // check if there are any members
+                    if (!data.members || data.members.length == 0) {
+                        const li = document.createElement("li");
+                        li.textContent = "No members found.";
+                        memberList.appendChild(li);
+                        return;
+                    }
+
+                    // display each member
+                    data.members.forEach(member => {
+                        const li = document.createElement("li");
+
+                        li.textContent =
+                            member.username + " - " +
+                            (member.Response || "No response");
+
+                        memberList.appendChild(li);
+                    });
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to load members.";
+                }
+            }
+
+            // load the events into the dropdown
+            async function loadEvents() {
+                try {
+                    const response = await fetch("get_events_handler.php");
+                    const data = await response.json();
+
+                    // check if the events loaded successfully
+                    if (!data.success) {
+                        messagebox.textContent = data.message || "Unable to load events.";
+                        return;
+                    }
+
+                    // add the events to the dropdown
+                    if (!data.events || data.events.length == 0) {
+                        messagebox.textContent = "No events available.";
+                        return;
+                    }
+
+                    data.events.forEach(event => {
+                        const option = document.createElement("option");
+                        option.value = event.EventID;
+                        option.textContent = event.EventName + " - " + event.EventDate;
+                        eventDropdown.appendChild(option);
+                    });
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to load events.";
+                }
+            }
+
+            // load the suggestions for this hangout
+            async function loadSuggestions() {
+                try {
+                    const response = await fetch("get_suggestions_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            hangout_id: hangoutID
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // check if the suggestions loaded successfully
+                    if (!data.success) {
+                        messagebox.textContent = data.message || "Unable to load suggestions.";
+                        return;
+                    }
+
+                    // clear the old suggestions
+                    suggestionList.innerHTML = "";
+
+                    // check if there are any suggestions
+                    if (!data.suggestions || data.suggestions.length == 0) {
+                        result.textContent = "No one voted yet";
+                        const li = document.createElement("li");
+                        li.textContent = "No suggestions yet.";
+                        suggestionList.appendChild(li);
+                        return;
+                    }
+
+                    // lets find the highest vote count
+                    let winningVote = 0;
+
+                    // go through every suggestion to count votes for each event
+                    data.suggestions.forEach(function(suggestion) {
+                        // check if a specific suggestion has more votes than the event with the highest votes
+                        if (Number(suggestion.VoteCount) > winningVote) {
+                            winningVote = Number(suggestion.VoteCount);
+                        }
+                    });
+
+                    // check if votes are empty
+                    if (winningVote === 0) {
+                        result.textContent = "No one voted yet";
+                    }
+                    else {
+                        // two events could be winner so need array
+                        const winners = [];
+
+                        // go through each suggestion
+                        data.suggestions.forEach(function(suggestion) {
+                            // check if the suggestion has the highest votes
+                            if (Number(suggestion.VoteCount) === winningVote) {
+                                winners.push(suggestion);
+                            }
+                        });
+
+                        // get the names of the winners
+                        const winnerNames = [];
+                        winners.forEach(function(suggestion) {
+                            winnerNames.push(suggestion.EventName);
+                        });
+
+                        // display the winner or tie
+                        if (winners.length === 1) {
+                            result.textContent =
+                                "Winner: " + winnerNames[0] + " (" + winningVote + " votes)";
+                        }
+                        else {
+                            result.textContent = "Tied: " + winnerNames.join(", ") + " (" + winningVote + " votes each)";
+                        }
+                    }
+
+                    // display each suggestion
+                    data.suggestions.forEach(suggestion => {
+                        const li = document.createElement("li");
+
+                        li.textContent =
+                            suggestion.EventName + " - " +
+                            suggestion.EventDate + " - " +
+                            suggestion.Venue + " - Votes: " +
+                            suggestion.VoteCount + " ";
+
+                        // create the vote button
+                        const button = document.createElement("button");
+                        button.type = "button";
+                        button.dataset.suggestionId = suggestion.HangoutSuggestionID;
+
+                        // check if the user already voted
+                        if (Number(suggestion.UserVoted) === 1) {
+                            button.textContent = "Voted";
+                            button.disabled = true;
+                        }
+                        else {
+                            button.textContent = "Vote";
+
+                            // send the vote when the button is clicked
+                            button.addEventListener("click", function() {
+                                sendVote(button.dataset.suggestionId, button);
+                            });
+                        }
+
+                        li.appendChild(button);
+                        suggestionList.appendChild(li);
+                    });
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to load suggestions.";
+                }
+            }
+
+            // send a vote for a suggestion
+            async function sendVote(suggestionID, button) {
+
+                // disable the button while the vote is being sent
+                button.disabled = true;
+
+                try {
+                    const response = await fetch("vote_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            suggestion_id: suggestionID
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // display the response message
+                    messagebox.textContent = data.message || "Unable to submit vote.";
+
+                    // reload the suggestions if the vote was successful
+                    if (data.success) {
+                        await loadSuggestions();
+                    }
+                    else {
+                        button.disabled = false;
+                    }
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to submit vote.";
+                    button.disabled = false;
+                }
+            }
+
+            // submit a new event suggestion
+            suggestForm.addEventListener("submit", async function(e) {
+
+                // stop the page from refreshing
+                e.preventDefault();
+
+                // get the selected event
+                const eventID = eventDropdown.value;
+
+                // check if an event was selected
+                if (eventID === "") {
+                    messagebox.textContent = "Please select an event.";
+                    return;
+                }
+
+                try {
+                    const response = await fetch("suggest_event_handler.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            session_token: session_token,
+                            hangout_id: hangoutID,
+                            event_id: eventID
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // display the response message
+                    messagebox.textContent = data.message || "Unable to suggest event.";
+
+                    // reload the suggestions if the event was added
+                    if (data.success) {
+                        await loadSuggestions();
+                    }
+
+                }
+                catch (error) {
+                    console.error(error);
+                    messagebox.textContent = "Unable to suggest event.";
+                }
+            });
+
+            // load the events, members and suggestions when the page opens
+            loadEvents();
+            loadMembers();
+            loadSuggestions();
+
+        }
+
+    </script>
+
+</body>
+</html>
