@@ -192,9 +192,8 @@ async function loadReviews(){
 
 loadReviews();
 
- // If the event doesn't exist, or something went wrong on the server
-        if (!data.success || !data.event) {
-            status.textContent = data.message || "Event not found.";
+        if (!ev) {
+            status.textContent = "Event not found.";
             return;
         }
 	
