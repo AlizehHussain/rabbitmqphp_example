@@ -191,17 +191,18 @@ async function loadReviews(){
 }
 
 loadReviews();
-
-        if (!ev) {
-            status.textContent = "Event not found.";
-            return;
-        }
-	
 	
 	const ev = data.event;
 	
         // Put the event name in the browser tab
-        document.title = ev.EventName;
+	document.title = ev.EventName;
+
+	if (!ev) {
+            status.textContent = "Event not found.";
+            return;
+        }
+	
+
 
         // Fill in each field. textContent shows plain text only, so event data
         // can't inject code into the page. "||" gives a fallback when a field is empty.
