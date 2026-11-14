@@ -1,0 +1,14 @@
+[Unit]
+Description=IT490 send event reminder emails
+# Needs the database and RabbitMQ up before it runs
+After=mysql.service rabbitmq-server.service
+
+[Service]
+# "oneshot" = run the script once and exit (not a program that stays running like the listener)
+Type=oneshot
+User=james
+# The script opens testRabbitMQ.ini and host.ini from the current folder
+WorkingDirectory=/home/james/rabbitmqphp_example
+# Same DB login file as the listener
+EnvironmentFile=/etc/eventplanner/db.env
+ExecStart=/usr/bin/php sendReminders.php

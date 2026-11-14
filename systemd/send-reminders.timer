@@ -1,0 +1,12 @@
+[Unit]
+Description=Run send-reminders.service every hour
+
+[Timer]
+# Run at the top of every hour
+OnCalendar=hourly
+# If the VM was off when it should have run, run it as soon as the VM boots
+Persistent=true
+
+[Install]
+# Start the timer automatically when the VM boots
+WantedBy=timers.target

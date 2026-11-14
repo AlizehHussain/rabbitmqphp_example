@@ -1,0 +1,20 @@
+[Unit]
+Description=IT490 database listener
+# Wait for MySQL and RabbitMQ to start before starting the listener
+After=network-online.target mysql.service rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+User=james
+# The listener opens testRabbitMQ.ini and host.ini from the current folder
+WorkingDirectory=/home/james/rabbitmqphp_example
+# Loads DB_HOST, DB_PASSWORD, etc. as environment variables
+EnvironmentFile=/etc/eventplanner/db.env
+ExecStart=/usr/bin/php db_listner.php
+# If it crashes, wait 5 seconds and start it again
+Restart=always
+RestartSec=5
+
+[Install]
+# Start it automatically when the VM boots
+WantedBy=multi-user.target
