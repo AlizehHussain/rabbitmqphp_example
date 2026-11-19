@@ -1,0 +1,18 @@
+[Unit]
+Description=IT490 email listener (sends emails from emailQueue)
+# wait for the network and RabbitMQ before starting
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+# run as you, so it can read /etc/eventplanner/email.ini
+User=james
+WorkingDirectory=/home/james/rabbitmqphp_example
+ExecStart=/usr/bin/php /home/james/rabbitmqphp_example/dmz/email/emailListener.php
+# if it ever crashes, start it again after 5 seconds
+Restart=always
+RestartSec=5
+
+[Install]
+# start it on every normal boot
+WantedBy=multi-user.target
