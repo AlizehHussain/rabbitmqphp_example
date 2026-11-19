@@ -62,19 +62,10 @@
         // checks whether the login details are correct
         if (data.success)
         {
-            // if the login details are correct, it stores token into a session storage
-            sessionStorage.setItem("session_token", data.session_token);
-            // check if there is a pending invite
-            const pendingInvite = sessionStorage.getItem("pending_invite");
-            if (pendingInvite) {// remove the saved invite
-            sessionStorage.removeItem("pending_invite");
-            // go to the invite link
-            window.location.href = "join_group.html?token=" + encodeURIComponent(pendingInvite);
-        }
-        else {
-            // go to the home page
-            window.location.href = "home.php";
-        }  
+            // password was right: the listener emailed a code
+            // remember who is logging in, then go type in the code
+            sessionStorage.setItem("mfa_user_id", data.user_id);
+            window.location.href = "verify.php";
         }
         else{
             // else tells the user that the login details were incorrect, and doesn't store them

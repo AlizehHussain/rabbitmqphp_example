@@ -29,20 +29,19 @@ $request['password'] = $password;
 //send request to rabbitmq and wait for a reply from listner
 $response = $client->send_request($request);
 
-// check if login was successful and includes a token
-if (isset($response["success"]) && $response["success"] === true 
-&& isset ($response['session_token']) )
+// MFA: if the password was right, the listener emails a code and says mfa_required.
+// There's no session token yet, so we just pass the user_id on to the login page,
+// which sends the user to verify.php to type in the code.
+if (isset($response["success"]) && $response["success"] === true
+&& isset($response["mfa_required"]))
     {
-        //output login was successful and the token is sent to login page
-        //turning php array back into json to send to login
         echo json_encode(
             [
-            "success" => true, 
-            "session_token" => $response["session_token"],
+            "success" => true,
+            "mfa_required" => true,
             "user_id" => $response["user_id"]
             ]
             );
-        
     }
 else
     {

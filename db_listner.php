@@ -73,73 +73,114 @@ function doRegister($username, $email, $password){
 
 }
 
-function doLogin($username,$password)
+// Step 1 of login: check the username and password.
+// If they're right, email a 6-digit code instead of logging in right away (MFA).
+function doLogin($username, $password)
 {
 	$connection = getConnection();
-// checing if the user a nd password hash exist in the table
-	$stmt = $connection->prepare(
-		"SELECT uid, password_hash
-		FROM users
-		WHERE username = ? OR email = ?
-		LIMIT 1"
-	);
-	
-	//binding the parameters
-    $stmt->bind_param("ss", $username, $username);
-    //executing query
-    $stmt->execute();
-	
-	// getting results from the queryy, hoping this works
-	$stmt_result = $stmt->get_result();
 
+	// find the user by username or email
+	$stmt = $connection->prepare(
+		"SELECT uid, email, password_hash FROM users
+		WHERE username = ? OR email = ? LIMIT 1"
+	);
+	$stmt->bind_param("ss", $username, $username);
+	$stmt->execute();
+	$row = $stmt->get_result()->fetch_assoc();
 	$stmt->close();
 
-	//fetch associative array
-	if ($row = $stmt_result->fetch_assoc()) {
-		// if the useer exists, getting the uid and pwd hash from users table
-		$uid = $row['uid'];
-		$hashedPw = $row['password_hash'];
-
-	//use password_verify($password, $hashedPW), returns true when entered password matches the stored hash
-	$verify_pwd =password_verify($password, $hashedPw);
-	if ($verify_pwd) 
-		{
-		//generate session token after successful login
-		$session_token = keyGenerator($uid);
-		//hash the token
-		$token_hash = hash('sha256', $session_token);
-		//insert the token in the able with expiry
-		$stmt = $connection->prepare (
-			"INSERT INTO sessions (uid, session_token, created_at, expires_time)
-			VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 30 MINUTE))"
-		);
-		//bind params
-		$stmt->bind_param("is", $uid, $token_hash);
-	// run the query
-		$stmt->execute();
-		// closing the query
-		$stmt->close();
-		//return the token to the frontend
-		return
-		[
-			//login successful, geerate session token for frontend
-			'success' => true,
-			'session_token' => $session_token,
-			'user_id' => $uid,
-			'message' => 'Login successful'
-		];
-		} 
+	// wrong username OR wrong password gets the same message,
+	// so we never tell someone which one was wrong
+	if (!$row || !password_verify($password, $row['password_hash'])) {
+		return ['success' => false, 'message' => 'Login unsuccessful'];
 	}
-	return 
-	[
-		// no session token generated if login credentials are wrong
-		//login failed
-		'success' => false,
-		'message' => 'Login unsuccessful'
+
+	// make a random 6-digit code
+	$code = (string) random_int(100000, 999999);
+
+	// save the code's HASH (not the code itself) and when it expires (2 minutes)
+	$codeHash = hash('sha256', $code);
+	$stmt = $connection->prepare(
+		"UPDATE users SET mfa_code = ?, mfa_expires = DATE_ADD(NOW(), INTERVAL 2 MINUTE)
+		WHERE uid = ?"
+	);
+	$stmt->bind_param("si", $codeHash, $row['uid']);
+	$stmt->execute();
+	$stmt->close();
+
+	// email the code to the user
+	sendMfaEmail($row['email'], $code);
+
+	// no session yet: the user has to enter the code first
+	return [
+		'success' => true,
+		'mfa_required' => true,
+		'user_id' => $row['uid'],
+		'message' => 'We emailed you a login code'
 	];
-	
 }
 
+// Puts the code email on emailQueue for the email listener to send.
+// publish() doesn't wait for an answer, so login stays fast.
+function sendMfaEmail($email, $code){
+	try {
+		$client = new rabbitMQClient("testRabbitMQ.ini", "emailServer");
+		$client->publish([
+			"type"     => "send_email",
+			"template" => "mfa_code",
+			"to"       => $email,
+			"event"    => ["code" => $code]
+		]);
+	} catch (Throwable $e) {
+		error_log("MFA email error: " . $e->getMessage());
+	}
+}
+
+// Step 2 of login: check the code. If it's right and not expired, log the user in.
+function doVerifyMfa($userId, $code)
+{
+	$connection = getConnection();
+	$userId = (int) $userId;
+	$codeHash = hash('sha256', trim($code));
+
+	// the code has to match AND not be expired
+	$stmt = $connection->prepare(
+		"SELECT uid FROM users
+		WHERE uid = ? AND mfa_code = ? AND mfa_expires > NOW()"
+	);
+	$stmt->bind_param("is", $userId, $codeHash);
+	$stmt->execute();
+	$row = $stmt->get_result()->fetch_assoc();
+	$stmt->close();
+
+	if (!$row) {
+		return ['success' => false, 'message' => 'Invalid or expired code'];
+	}
+
+	// clear the code so it can't be used a second time
+	$stmt = $connection->prepare("UPDATE users SET mfa_code = NULL, mfa_expires = NULL WHERE uid = ?");
+	$stmt->bind_param("i", $userId);
+	$stmt->execute();
+	$stmt->close();
+
+	// now create the session, the same way login used to
+	$session_token = keyGenerator($userId);
+	$token_hash = hash('sha256', $session_token);
+	$stmt = $connection->prepare(
+		"INSERT INTO sessions (uid, session_token, created_at, expires_time)
+		VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 30 MINUTE))"
+	);
+	$stmt->bind_param("is", $userId, $token_hash);
+	$stmt->execute();
+	$stmt->close();
+
+	return [
+		'success' => true,
+		'session_token' => $session_token,
+		'user_id' => $userId,
+		'message' => 'Login successful'
+	];
+}
 function doValidate($sessionToken){
 	//hash the incoming token
 	$token_hash = hash('sha256', $sessionToken);
@@ -2496,6 +2537,8 @@ function requestProcessor($request){
 					$request["username"] ?? "",
 					$request["password"] ?? ""
 				);
+			case "verify_mfa":
+				return doVerifyMfa($request["user_id"] ?? 0, $request["code"] ?? "");
 			case "validate_session":
 				return doValidate($request["sessionToken"] ?? $request["session_token"] ?? "");
 			case "logout":

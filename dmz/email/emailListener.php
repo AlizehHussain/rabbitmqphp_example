@@ -115,7 +115,17 @@ function buildEmail($template, $event) {
         ];
     }
 
-    return null;   // the template name wasn't one we know
+    // Login verification code for MFA. The code comes in as event['code'].
+    // cleanText keeps it to 6 characters so nothing else can be slipped in.
+    if ($template === 'mfa_code') {
+        $code = cleanText($event['code'] ?? '', 6);
+        return [
+            "subject" => "Your Events login code",
+            "body"    => "Your login code is: " . $code . "\n\nIt expires in 2 minutes. If you didn't try to log in, you can ignore this email."
+        ];
+    }
+
+return null;   // the template name wasn't one we know
 }
 
 
